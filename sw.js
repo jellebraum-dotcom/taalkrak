@@ -1,5 +1,5 @@
 /* Taalkrak service worker — app-shell cache voor offline gebruik */
-var CACHE = "taalkrak-v2";
+var CACHE = "taalkrak-v3";
 var ASSETS = [
   "./", "index.html", "leerkracht.html", "taalkrak.css",
   "engine.js", "jsqr.js", "qrcode.js", "manifest.webmanifest",

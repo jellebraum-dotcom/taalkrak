@@ -475,7 +475,7 @@ function $(s){ return document.querySelector(s); }
 
 function startGame(cfg){
   resumeAudio();
-  game={ cfg:cfg, i:0, stars:0, good:0, total:0, deck:null, lastKey:null, timer:null, cur:null, locked:false, reveal:false };
+  game={ cfg:cfg, i:0, stars:0, good:0, total:0, deck:null, lastKey:null, log:[], timer:null, cur:null, locked:false, reveal:false };
   ["screenHome","screenSetup","screenScan","screenGen","screenDone"].forEach(function(id){
     var el=document.getElementById(id); if(el) el.classList.add("hidden");
   });
@@ -501,6 +501,40 @@ function endGame(){
   var b1=h("div","bd"); b1.appendChild(h("b",null,"★ "+game.stars)); b1.appendChild(h("span",null,"sterren")); bd.appendChild(b1);
   var b2=h("div","bd"); b2.appendChild(h("b",null,pct+"%")); b2.appendChild(h("span",null,"juist")); bd.appendChild(b2);
   box.appendChild(bd);
+
+  /* overzicht van de reeks, met de fouten aangeduid */
+  if(game.log.length){
+    var rev=h("div","review");
+    var head=h("h3",null,"Overzicht van je reeks");
+    var nWrong=game.log.filter(function(e){return !e.ok;}).length;
+    head.appendChild(h("span","review__count", nWrong? nWrong+" om te herhalen":"alles juist!"));
+    rev.appendChild(head);
+    game.log.forEach(function(e,idx){
+      var row=h("div","review__row"+(e.ok?"":" review__row--bad"));
+      row.appendChild(h("span","review__ic"+(e.ok?" review__ic--good":" review__ic--bad"), e.ok?"✓":"✗"));
+      var tx=h("span","review__tx");
+      tx.appendChild(h("b",null,(idx+1)+". "+reviewLabel(e.ex)));
+      if(!e.ok){
+        var sub=h("span","review__given");
+        if(e.timeout) sub.textContent="de tijd was om";
+        else if(e.given!=null && e.given!==""){
+          var fout = e.ex.vorm==="invul"? (e.ex.pre||"")+e.given+(e.ex.post||"") : e.given;
+          sub.textContent="jouw antwoord: "+fout;
+        } else sub.textContent="geen antwoord";
+        tx.appendChild(sub);
+      }
+      row.appendChild(tx);
+      if(ttsAvailable() && e.ex.tts){
+        var sp=h("button","review__speak","🔊"); sp.type="button";
+        sp.setAttribute("aria-label","Luister");
+        (function(t){ sp.onclick=function(){ resumeAudio(); speak(t); }; })(e.ex.tts);
+        row.appendChild(sp);
+      }
+      rev.appendChild(row);
+    });
+    box.appendChild(rev);
+  }
+
   var btns=h("div","results__btns");
   var again=h("button","btn btn--grass","🔁 Nog eens!"); again.type="button";
   again.onclick=function(){ $("#screenDone").classList.add("hidden"); startGame(game.cfg); };
@@ -510,6 +544,14 @@ function endGame(){
   box.appendChild(btns);
   $("#screenDone").classList.remove("hidden");
   sDone(); confettiBurst();
+}
+
+/* leesbare weergave van een opdracht voor het overzicht */
+function reviewLabel(ex){
+  if(!ex) return "";
+  if(ex.vorm==="wtyp"||ex.vorm==="wkeu") return ex.zin.replace("___", ex.answer).replace(/ \./g,".")+" ("+ex.inf+")";
+  if(ex.vorm==="zin") return ex.answer;
+  return ex.word||ex.answer;
 }
 
 function clearTimer(){ if(game&&game.timer){ clearInterval(game.timer); game.timer=null; }
@@ -720,6 +762,8 @@ var GOOD=[["🎉","Goed zo!"],["⭐","Super!"],["👏","Knap!"],["💪","Sterk!"
 function submit(ok, ex, inputEl, choiceBtn){
   if(game.locked) return; game.locked=true;
   clearTimer(); game.total++;
+  var given = inputEl? inputEl.value : (choiceBtn? choiceBtn.textContent : null);
+  game.log.push({ok:ok, ex:ex, given:given});
   if(ok){
     game.good++; game.stars++;
     $("#starCount").textContent=String(game.stars);
@@ -741,6 +785,7 @@ function submit(ok, ex, inputEl, choiceBtn){
 function miss(msg){
   if(!game || game.locked) return; game.locked=true;
   game.total++;
+  game.log.push({ok:false, ex:game.cur, given:null, timeout:true});
   var full = game.cur? (game.cur.word||game.cur.answer):"";
   sBad(); splash(["⏰",msg||"De tijd is om!"], "Juist is: "+full);
   setTimeout(nextExercise, 2500);
