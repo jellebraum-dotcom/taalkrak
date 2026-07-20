@@ -328,60 +328,83 @@ function mutate(word, muts){
   return opts.length? pick(opts) : null;
 }
 
-/* Maak één oefening */
-function makeExercise(cfg, history){
-  var tries=0;
-  while(tries++<80){
-    var themeId=pick(cfg.themes);
-    var theme=themeById(cfg.graad, themeId);
-    if(!theme) continue;
-    var vormen=theme.vormen.filter(function(v){ return cfg.vormen.indexOf(v)>-1; });
-    if(!vormen.length) vormen=theme.vormen;
-    var vorm=pick(vormen);
-
-    var ex=null;
-    if(theme.items && theme.id.slice(0,2)==="ww"){          /* werkwoordzinnen */
-      var it=pick(theme.items);
-      var typed = !(cfg.vormen.length===1 && cfg.vormen[0]==="keuze");
-      ex={ vorm: typed? "wtyp":"wkeu", theme:theme, zin:it.z, inf:it.inf, answer:it.a,
-           choices: typed? null : shuffle([it.a].concat(it.w)),
-           tts: it.z.replace("___", it.a).replace(/ \./g,".") };
-    }
-    else if(theme.items){                                    /* zinnen (hoofdletters) */
-      var it2=pick(theme.items);
-      ex={ vorm:"zin", theme:theme, answer:it2.a, choices:shuffle([it2.a].concat(it2.w)), tts:it2.a };
-    }
-    else{
-      var pw=parseWord(pick(theme.words), theme.alts);
-      if(vorm==="invul" && pw.gap){
-        ex={ vorm:"invul", theme:theme, pre:pw.pre, gap:pw.gap, post:pw.post,
-             answer:pw.gap, word:pw.word, choices:shuffle(pw.alts.slice(0)), tts:pw.word };
-      } else if(vorm==="keuze"){
-        var wrong=null;
-        if(pw.alts && pw.gap){
-          var others=pw.alts.filter(function(a){return a!==pw.gap;});
-          if(others.length) wrong=pw.pre+pick(others)+pw.post;
-        }
-        if(!wrong) wrong=mutate(pw.word, theme.mut);
-        if(!wrong) continue;
-        var wrongs=[wrong];
-        if(pw.alts && pw.alts.length>2){
-          var others2=pw.alts.filter(function(a){ return a!==pw.gap && pw.pre+a+pw.post!==wrong; });
-          if(others2.length) wrongs.push(pw.pre+pick(others2)+pw.post);
-        }
-        ex={ vorm:"keuze", theme:theme, answer:pw.word, choices:shuffle([pw.word].concat(wrongs)), tts:pw.word };
-      } else { /* dictee */
-        ex={ vorm:"dictee", theme:theme, answer:pw.word, word:pw.word, tts:pw.word };
-      }
-    }
-    if(ex){
-      var key=ex.vorm+"|"+(ex.zin||ex.answer);
-      if(history.indexOf(key)>-1 && tries<60) continue;
-      history.push(key); if(history.length>14) history.shift();
-      return ex;
+/* ---- trekstapel: élke opdracht komt hoogstens één keer voor per ronde.
+   Pas als alle opdrachten uit de gekozen onderwerpen geweest zijn, wordt
+   de stapel opnieuw geschud (en dan komt de laatst gemaakte opdracht
+   nooit meteen opnieuw). ---- */
+function entryKey(e){ return e.theme.id+"|"+(e.word!=null? e.word : (e.item.z||e.item.a)); }
+function buildDeck(cfg){
+  var deck=[];
+  cfg.themes.forEach(function(id){
+    var t=themeById(cfg.graad,id); if(!t) return;
+    (t.words||[]).forEach(function(w){ deck.push({theme:t, word:w}); });
+    (t.items||[]).forEach(function(it){ deck.push({theme:t, item:it}); });
+  });
+  return shuffle(deck);
+}
+function drawEntry(state){
+  if(!state.deck || !state.deck.length){
+    state.deck=buildDeck(state.cfg);
+    if(state.deck.length>1 && state.lastKey &&
+       entryKey(state.deck[state.deck.length-1])===state.lastKey){
+      state.deck.unshift(state.deck.pop());
     }
   }
-  return null;
+  var e=state.deck.pop();
+  if(!e) return null;
+  state.lastKey=entryKey(e);
+  return e;
+}
+
+/* Maak één oefening uit een stapel-item */
+function exerciseFromEntry(cfg, entry){
+  if(!entry) return null;
+  var theme=entry.theme;
+  var vormen=theme.vormen.filter(function(v){ return cfg.vormen.indexOf(v)>-1; });
+  if(!vormen.length) vormen=theme.vormen;
+  var vorm=pick(vormen);
+
+  if(entry.item && theme.id.slice(0,2)==="ww"){             /* werkwoordzinnen */
+    var it=entry.item;
+    var typed = !(cfg.vormen.length===1 && cfg.vormen[0]==="keuze");
+    return { vorm: typed? "wtyp":"wkeu", theme:theme, zin:it.z, inf:it.inf, answer:it.a,
+             choices: typed? null : shuffle([it.a].concat(it.w)),
+             tts: it.z.replace("___", it.a).replace(/ \./g,".") };
+  }
+  if(entry.item){                                            /* zinnen (hoofdletters) */
+    var it2=entry.item;
+    return { vorm:"zin", theme:theme, answer:it2.a, choices:shuffle([it2.a].concat(it2.w)), tts:it2.a };
+  }
+  var pw=parseWord(entry.word, theme.alts);
+  if(vorm==="invul" && pw.gap){
+    return { vorm:"invul", theme:theme, pre:pw.pre, gap:pw.gap, post:pw.post,
+             answer:pw.gap, word:pw.word, choices:shuffle(pw.alts.slice(0)), tts:pw.word };
+  }
+  if(vorm==="keuze"){
+    var wrong=null;
+    if(pw.alts && pw.gap){
+      var others=pw.alts.filter(function(a){return a!==pw.gap;});
+      if(others.length) wrong=pw.pre+pick(others)+pw.post;
+    }
+    if(!wrong) wrong=mutate(pw.word, theme.mut);
+    if(wrong){
+      var wrongs=[wrong];
+      if(pw.alts && pw.alts.length>2){
+        var others2=pw.alts.filter(function(a){ return a!==pw.gap && pw.pre+a+pw.post!==wrong; });
+        if(others2.length) wrongs.push(pw.pre+pick(others2)+pw.post);
+      }
+      return { vorm:"keuze", theme:theme, answer:pw.word, choices:shuffle([pw.word].concat(wrongs)), tts:pw.word };
+    }
+  }
+  /* dictee (en terugval) */
+  return { vorm:"dictee", theme:theme, answer:pw.word, word:pw.word, tts:pw.word };
+}
+
+/* compatibele helper (o.a. voor tests): trekt uit een meegegeven staat */
+function makeExercise(cfg, state){
+  if(Array.isArray(state)) state={cfg:cfg, deck:null, lastKey:null, _arr:state};
+  state.cfg=cfg;
+  return exerciseFromEntry(cfg, drawEntry(state));
 }
 
 /* ===================== GELUID ===================== */
@@ -452,7 +475,7 @@ function $(s){ return document.querySelector(s); }
 
 function startGame(cfg){
   resumeAudio();
-  game={ cfg:cfg, i:0, stars:0, good:0, total:0, history:[], timer:null, cur:null, locked:false, reveal:false };
+  game={ cfg:cfg, i:0, stars:0, good:0, total:0, deck:null, lastKey:null, timer:null, cur:null, locked:false, reveal:false };
   ["screenHome","screenSetup","screenScan","screenGen","screenDone"].forEach(function(id){
     var el=document.getElementById(id); if(el) el.classList.add("hidden");
   });
@@ -496,7 +519,7 @@ function nextExercise(){
   clearTimer();
   var s=$("#splash"); if(s) s.classList.remove("show");
   if(game.cfg.count>0 && game.i>=game.cfg.count){ return endGame(); }
-  var ex=makeExercise(game.cfg, game.history);
+  var ex=exerciseFromEntry(game.cfg, drawEntry(game));
   if(!ex){ return endGame(); }
   game.cur=ex; game.locked=false; game.reveal=false; game.i++;
   renderExercise(ex);
@@ -772,6 +795,7 @@ return {
   defaults:defaults, makeSettings:makeSettings,
   buildHash:buildHash, parseParams:parseParams,
   makeExercise:makeExercise, mutate:mutate,
+  buildDeck:buildDeck, drawEntry:drawEntry, exerciseFromEntry:exerciseFromEntry, entryKey:entryKey,
   startGame:startGame, setOnExit:setOnExit,
   toggleSound:toggleSound, resumeAudio:resumeAudio,
   speak:speak, ttsAvailable:ttsAvailable
