@@ -467,9 +467,17 @@ if(typeof window!=="undefined" && window.speechSynthesis){
   speechSynthesis.onvoiceschanged=findVoice;
 }
 /* Losse woorden worden afgekapt; een punt dwingt zinsprosodie af. */
+/* Fonetische respellingen voor woorden die de engine fout uitspreekt.
+   Sleutel = het woord zoals het gespeld wordt, waarde = hoe het moet KLINKEN.
+   Het kind schrijft nog steeds de echte spelling: dat is het punt van een dictee.
+   Vul aan met de uitkomst van uitspraak-test.html. */
+var SPRAAK = {};
+
 function prepareTTS(text){
   var s=String(text==null?"":text).trim();
   if(!s) return "";
+  var key=s.toLowerCase().replace(/[.!?\u2026]+$/,"");
+  if(Object.prototype.hasOwnProperty.call(SPRAAK,key) && SPRAAK[key]) s=SPRAAK[key];
   if(!/[.!?\u2026]$/.test(s)) s+=".";
   return s;
 }
@@ -913,7 +921,7 @@ return {
   buildDeck:buildDeck, drawEntry:drawEntry, exerciseFromEntry:exerciseFromEntry, entryKey:entryKey,
   startGame:startGame, setOnExit:setOnExit,
   toggleSound:toggleSound, resumeAudio:resumeAudio,
-  speak:speak, ttsAvailable:ttsAvailable, ttsUsable:ttsUsable, primeTTS:primeTTS
+  speak:speak, ttsAvailable:ttsAvailable, ttsUsable:ttsUsable, primeTTS:primeTTS, SPRAAK:SPRAAK
 };
 })();
 if(typeof module!=="undefined" && module.exports) module.exports=TK;
