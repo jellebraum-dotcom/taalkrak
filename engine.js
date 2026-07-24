@@ -409,7 +409,7 @@ function makeExercise(cfg, state){
 
 /* ===================== GELUID ===================== */
 var actx=null, soundOn=true;
-function resumeAudio(){ try{ if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==="suspended") actx.resume(); }catch(e){} }
+function resumeAudio(){ try{ if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==="suspended") actx.resume(); }catch(e){} primeTTS(); }
 function beep(freq,dur,type,vol,when){
   if(!soundOn||!actx) return;
   try{
@@ -432,37 +432,97 @@ function toggleSound(){
   return soundOn;
 }
 
-/* ===================== VOORLEESSTEM (dictee) ===================== */
-var nlVoice=null;
+/* ===================== VOORLEESSTEM (dictee) =====================
+   Doel: onberispelijke Nederlandse uitspraak voor kinderen vanaf 6 jaar.
+   ================================================================= */
+var nlVoice=null, voicesLoaded=false, voiceQueue=[], voiceWarned=false;
+
+/* Spreeksnelheid per graad: L1-L2 (6-8 jaar) verwerkt klanken trager. */
+var BASE_RATE = {1:0.75, 2:0.84, 3:0.92};
+
+function scoreVoice(v){
+  var lang=(v.lang||"").toLowerCase().replace("_","-");
+  if(lang.slice(0,2)!=="nl") return -1;
+  var s=(lang==="nl-be")?100:60, n=(v.name||"").toLowerCase();
+  if(/enhanced|premium|neural|natural|wavenet|siri/.test(n)) s+=25;
+  if(/compact/.test(n)) s-=20;
+  if(v.localService) s+=10;
+  return s;
+}
 function findVoice(){
   if(typeof window==="undefined" || !window.speechSynthesis) return null;
   var vs=speechSynthesis.getVoices()||[];
-  var be=null, nl=null;
-  vs.forEach(function(v){
-    var l=(v.lang||"").toLowerCase().replace("_","-");
-    if(l==="nl-be" && !be) be=v;
-    if(l.slice(0,2)==="nl" && !nl) nl=v;
-  });
-  nlVoice = be||nl;
+  if(!vs.length) return null;
+  voicesLoaded=true;
+  var best=null,bestScore=-1;
+  vs.forEach(function(v){ var s=scoreVoice(v); if(s>bestScore){bestScore=s;best=v;} });
+  /* KRITIEK: geen terugval op de standaardstem (meestal Engels). */
+  nlVoice=(bestScore>=0)?best:null;
+  var q=voiceQueue; voiceQueue=[];
+  q.forEach(function(job){ speak(job.text, job.opts); });
   return nlVoice;
 }
 if(typeof window!=="undefined" && window.speechSynthesis){
   findVoice();
   speechSynthesis.onvoiceschanged=findVoice;
 }
-function speak(text, slow){
+/* Losse woorden worden afgekapt; een punt dwingt zinsprosodie af. */
+function prepareTTS(text){
+  var s=String(text==null?"":text).trim();
+  if(!s) return "";
+  if(!/[.!?\u2026]$/.test(s)) s+=".";
+  return s;
+}
+function warnNoVoice(){
+  if(voiceWarned) return; voiceWarned=true;
+  try{ console.warn("Taalkrak: geen Nederlandse stem gevonden - luisterdictee zwijgt."); }catch(e){}
+  if(typeof document==="undefined"||!document.body) return;
+  var bar=document.createElement("div");
+  bar.className="ttswarn"; bar.setAttribute("role","status");
+  bar.textContent="Geen Nederlandse stem op dit toestel. Installeer een Nederlandse stem bij de taalinstellingen, of kies een andere oefenvorm dan luisterdictee.";
+  bar.onclick=function(){ bar.remove(); };
+  document.body.appendChild(bar);
+  setTimeout(function(){ if(bar.parentNode) bar.remove(); },12000);
+}
+function speak(text, opts){
+  if(opts===true) opts={slow:true};
+  if(!opts) opts={};
   if(typeof window==="undefined" || !window.speechSynthesis || !soundOn) return false;
+  if(!text) return false;
+  if(!voicesLoaded){
+    findVoice();
+    if(!voicesLoaded){
+      if(voiceQueue.length<3) voiceQueue.push({text:text, opts:opts});
+      return false;
+    }
+  }
+  if(!nlVoice){ warnNoVoice(); return false; }
+  var graad=(typeof game!=="undefined" && game && game.cfg && game.cfg.graad)||1;
+  var rate=BASE_RATE[graad]||0.8;
+  if(opts.slow) rate=Math.max(0.60, rate-0.15);
   try{
     speechSynthesis.cancel();
-    var u=new SpeechSynthesisUtterance(text);
-    if(!nlVoice) findVoice();
-    if(nlVoice) u.voice=nlVoice;
-    u.lang=(nlVoice&&nlVoice.lang)||"nl-BE";
-    u.rate=slow? .72 : .88;
-    u.pitch=1;
-    speechSynthesis.speak(u);
+    var u=new SpeechSynthesisUtterance(prepareTTS(text));
+    u.voice=nlVoice; u.lang=nlVoice.lang; u.rate=rate; u.pitch=1; u.volume=1;
+    u.onerror=function(e){
+      var err=e&&e.error;
+      if(err&&err!=="canceled"&&err!=="interrupted"){ try{console.warn("Taalkrak TTS:",err);}catch(_){} }
+    };
+    /* Chrome: cancel() is async; direct speak() erna wordt afgekapt. */
+    setTimeout(function(){ try{ speechSynthesis.speak(u); }catch(e){} },70);
     return true;
   }catch(e){ return false; }
+}
+/* iOS/Safari: spraak eenmalig ontgrendelen via een gebruikersgebaar. */
+function primeTTS(){
+  if(typeof window==="undefined" || !window.speechSynthesis) return;
+  try{ var u=new SpeechSynthesisUtterance(" "); u.volume=0; speechSynthesis.speak(u); }catch(e){}
+  findVoice();
+}
+function ttsUsable(){
+  if(typeof window==="undefined" || !window.speechSynthesis) return false;
+  if(!voicesLoaded) findVoice();
+  return !!nlVoice;
 }
 function ttsAvailable(){ return typeof window!=="undefined" && !!window.speechSynthesis; }
 
@@ -568,7 +628,7 @@ function nextExercise(){
   var fill=$("#progFill");
   if(fill) fill.style.width = game.cfg.count>0? Math.round(100*(game.i-1)/game.cfg.count)+"%" : "0%";
   if(game.cfg.session!=="class" && game.cfg.seconds>0) startTimer(game.cfg.seconds);
-  if(ex.vorm==="dictee" && game.cfg.session!=="class") setTimeout(function(){ speak(ex.tts); },350);
+  if(ex.vorm==="dictee" && game.cfg.session!=="class") setTimeout(function(){ speak(ex.tts); },500);
 }
 
 function startTimer(secs){
@@ -607,6 +667,13 @@ function speakerBtn(text,big){
   return b;
 }
 
+function slowBtn(text){
+  var b=el("button","speakbtn speakbtn--slow","\uD83D\uDC22");
+  b.type="button"; b.setAttribute("aria-label","Luister nog eens, trager");
+  b.onclick=function(){ resumeAudio(); speak(text,{slow:true}); };
+  return b;
+}
+
 function checkRow(onCheck){
   var row=el("div","checkrow");
   var btn=el("button","btn btn--grass btn--check","✓ Controleer"); btn.type="button";
@@ -642,7 +709,10 @@ function renderExercise(ex){
 function renderBody(ex, box, cls){
   if(ex.vorm==="dictee"){
     box.appendChild(el("p","exlead", cls? "Luister goed. Wie kan dit woord schrijven?" : "Luister en typ het woord"));
-    box.appendChild(speakerBtn(ex.tts,true));
+    var spk=el("div","speakrow");
+    spk.appendChild(speakerBtn(ex.tts,true));
+    spk.appendChild(slowBtn(ex.tts));
+    box.appendChild(spk);
     if(cls){
       var hidden=el("div","eq eq--word"); hidden.id="classAnswer";
       ex.answer.split("").forEach(function(){ hidden.appendChild(el("span","wtile wtile--secret","·")); });
@@ -843,7 +913,7 @@ return {
   buildDeck:buildDeck, drawEntry:drawEntry, exerciseFromEntry:exerciseFromEntry, entryKey:entryKey,
   startGame:startGame, setOnExit:setOnExit,
   toggleSound:toggleSound, resumeAudio:resumeAudio,
-  speak:speak, ttsAvailable:ttsAvailable
+  speak:speak, ttsAvailable:ttsAvailable, ttsUsable:ttsUsable, primeTTS:primeTTS
 };
 })();
 if(typeof module!=="undefined" && module.exports) module.exports=TK;
