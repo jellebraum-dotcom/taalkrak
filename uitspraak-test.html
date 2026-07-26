@@ -3,121 +3,159 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Taalkrak — uitspraaktest</title>
+<title>Taalkrak — woordenlijst & uitspraak</title>
 <style>
 :root{--ink:#2B2D42;--paper:#FFF9F0;--card:#fff;--sky:#46B8E8;--sky-deep:#2A93C2;
- --grass:#36A85B;--berry:#E5566B;--line:#EBE2D2;--sun:#FFC233}
+ --grass:#36A85B;--berry:#E5566B;--line:#EBE2D2;--sun:#FFC233;--plum:#7B5EA7}
 *{box-sizing:border-box}
-body{margin:0;padding:20px;background:var(--paper);color:var(--ink);
+body{margin:0;padding:18px;background:var(--paper);color:var(--ink);
  font:16px/1.45 "Segoe UI",system-ui,sans-serif}
-h1{margin:0 0 4px;font-size:22px}
-.sub{color:#6b6b7b;margin:0 0 18px;font-size:14px}
+h1{margin:0 0 2px;font-size:22px}
+.sub{color:#6b6b7b;margin:0 0 14px;font-size:14px}
 .bar{position:sticky;top:0;background:var(--paper);padding:10px 0;border-bottom:2px solid var(--line);
- z-index:10;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-button{font:inherit;cursor:pointer;border:none;border-radius:10px;padding:8px 14px;background:var(--sky);color:#fff}
+ z-index:10;display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+button{font:inherit;cursor:pointer;border:none;border-radius:10px;padding:8px 13px;background:var(--sky);color:#fff}
 button.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
-button.small{padding:5px 10px;font-size:14px;border-radius:8px}
+button.small{padding:4px 9px;font-size:14px;border-radius:8px}
+button[aria-pressed="true"]{background:var(--plum)}
 button:disabled{opacity:.4;cursor:default}
-select{font:inherit;padding:7px 10px;border-radius:10px;border:1px solid var(--line);background:#fff}
-.theme{margin:22px 0 8px;font-weight:700;font-size:15px;color:#555}
-table{width:100%;border-collapse:collapse;background:var(--card);border-radius:12px;overflow:hidden}
-td,th{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
-th{background:#f6f0e6;font-size:13px}
-td.w{font-weight:600;min-width:150px}
-td.r{color:#7a6a55;font-style:italic;min-width:150px}
-.mark{display:flex;gap:5px}
+select{font:inherit;padding:7px 9px;border-radius:10px;border:1px solid var(--line);background:#fff}
+.theme{margin:20px 0 6px;font-weight:700;font-size:15px;color:#444;display:flex;gap:9px;align-items:center}
+.badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;color:#fff;letter-spacing:.03em}
+.b-hoor{background:var(--grass)} .b-regel{background:var(--sky-deep)} .b-onthoud{background:var(--plum)}
+table{width:100%;border-collapse:collapse;background:var(--card);border-radius:10px;overflow:hidden;font-size:15px}
+td,th{padding:5px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{background:#f6f0e6;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+td.n{color:#a89880;width:52px;font-variant-numeric:tabular-nums}
+td.w{font-weight:600}
+td.f{font:13px ui-monospace,Consolas,monospace;color:#7a6a55}
+td.r{color:#7a6a55;font-style:italic}
 .mark button{background:#eee;color:#444}
 .mark button[data-on="1"]{background:var(--grass);color:#fff}
 .mark button.bad[data-on="1"]{background:var(--berry)}
 .mark button.resp[data-on="1"]{background:var(--sun);color:#333}
-#out{width:100%;height:230px;font:13px/1.4 ui-monospace,Consolas,monospace;
- border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;background:#fff}
+#out{width:100%;height:200px;font:13px/1.4 ui-monospace,Consolas,monospace;
+ border:1px solid var(--line);border-radius:10px;padding:9px;background:#fff}
 .count{font-size:13px;color:#6b6b7b}
-.legend{font-size:13px;color:#6b6b7b;margin:6px 0 0}
+.tot{margin:10px 0;font-size:14px;color:#555}
+@media print{
+  .bar,.noprint{display:none!important}
+  body{background:#fff;padding:0;font-size:12px}
+  table{font-size:12px} td,th{padding:3px 6px}
+  .theme{page-break-after:avoid}
+}
 </style>
 </head>
 <body>
 
-<h1>Taalkrak — uitspraaktest</h1>
-<p class="sub">Beluister elk woord met de stem die de app ook echt gebruikt. Markeer wat fout klinkt.
-Onderaan staat het resultaat klaar om te kopiëren.</p>
+<h1>Taalkrak — woordenlijst &amp; uitspraak</h1>
+<p class="sub">Twee gebruiken: <b>beluisteren</b> om te horen wat de computerstem fout doet, en
+<b>inspreken</b> om de volledige lijst met bestandsnamen af te drukken voor een menselijke stem.</p>
 
-<div class="bar">
-  <label>Graad
-    <select id="graad"><option value="1">1e graad</option><option value="2">2e graad</option><option value="3">3e graad</option></select>
-  </label>
-  <label>Stem <select id="voice"></select></label>
-  <label>Tempo <select id="rate">
-    <option value="0.75">0.75 (graad 1)</option>
-    <option value="0.84">0.84 (graad 2)</option>
-    <option value="0.92">0.92 (graad 3)</option>
-    <option value="0.60">0.60 (trager-knop)</option>
+<div class="bar noprint">
+  <button id="modeL" aria-pressed="true">🔊 Beluisteren</button>
+  <button id="modeR" class="ghost" aria-pressed="false">🎙 Inspreeklijst</button>
+  <span style="width:14px"></span>
+  <label>Graad <select id="graad">
+    <option value="1">1e graad</option><option value="2">2e graad</option>
+    <option value="3">3e graad</option><option value="0">alle</option>
   </select></label>
-  <button id="playAll">▶ Speel alles af</button>
+  <label>Soort <select id="type">
+    <option value="">alle</option><option value="hoor">hoorwoorden</option>
+    <option value="regel">regelwoorden</option><option value="onthoud">onthoudwoorden</option>
+  </select></label>
+  <label id="wVoice">Stem <select id="voice"></select></label>
+  <label id="wRate">Tempo <select id="rate">
+    <option value="0.75">0.75 (gr 1)</option><option value="0.84">0.84 (gr 2)</option>
+    <option value="0.92">0.92 (gr 3)</option><option value="0.60">0.60 (trager)</option>
+  </select></label>
+  <button id="playAll" class="ghost">▶ Alles</button>
   <button id="stop" class="ghost">■ Stop</button>
+  <button id="csv" class="ghost">⬇ CSV</button>
+  <button id="print" class="ghost">🖨 Afdrukken</button>
   <span class="count" id="count"></span>
 </div>
-<p class="legend">✓ goed · ✗ fout · ★ respelling klinkt beter (alleen bij woorden met een voorstel)</p>
 
+<p class="tot" id="tot"></p>
 <div id="list"></div>
 
-<h3>Resultaat</h3>
-<textarea id="out" readonly></textarea>
-<button id="copy" class="ghost small">Kopieer</button>
+<div class="noprint">
+  <h3>Resultaat beluisteren</h3>
+  <textarea id="out" readonly></textarea>
+</div>
 
 <script src="engine.js"></script>
 <script>
-/* Kandidaat-respellingen: fonetisch geschreven zodat de TTS-engine het
-   Vlaams correct uitspreekt. Het KIND schrijft nog steeds de echte spelling —
-   dat is precies de bedoeling van een dictee. */
-var KANDIDAAT = {
-  /* leenwoorden */
-  "bureau":"buroo", "chauffeur":"sjoffeur", "douche":"doesj", "etage":"eetaazje",
-  "garage":"garaazje", "horloge":"horloozje", "machine":"masjiene",
-  "restaurant":"restorant", "weekend":"wiekend", "baby":"beebie",
-  "pyjama":"pizjaama", "shampoo":"sjampoo", "niveau":"nivoo", "journaal":"zjoernaal",
-  "portemonnee":"portemonnee", "cabine":"kabiene",
-  /* c-woorden */
-  "cadeau":"kadoo", "circus":"sirkus", "citroen":"sitroen", "precies":"presies",
-  "centrum":"sentrum", "succes":"sukses", "medicijn":"medisijn",
-  "computer":"kompjoeter", "chocolade":"sjokolade", "december":"deesember",
-  "concert":"konsert", "cijfer":"seifer",
-  /* -tie en -isch */
-  "politie":"polietsie", "vakantie":"vakantsie", "informatie":"informaatsie",
-  "actie":"aktsie", "reactie":"reaktsie", "emotie":"emootsie",
-  "logisch":"logies", "elektrisch":"elektries", "fantastisch":"fantasties",
-  "praktisch":"prakties",
-  /* apostrof */
-  "baby's":"beebies"
+/* Kandidaat-respellingen: fonetisch, zodat de computerstem het Vlaams juist zegt.
+   Het kind schrijft nog steeds de echte spelling. */
+var KANDIDAAT={
+ "bureau":"buroo","chauffeur":"sjoffeur","douche":"doesj","etage":"eetaazje","garage":"garaazje",
+ "horloge":"horloozje","machine":"masjiene","restaurant":"restorant","weekend":"wiekend","baby":"beebie",
+ "pyjama":"pizjaama","shampoo":"sjampoo","niveau":"nivoo","journaal":"zjoernaal","cabine":"kabiene",
+ "cadeau":"kadoo","circus":"sirkus","citroen":"sitroen","precies":"presies","centrum":"sentrum",
+ "succes":"sukses","medicijn":"medisijn","computer":"kompjoeter","chocolade":"sjokolade",
+ "december":"deesember","concert":"konsert","cijfer":"seifer","politie":"polietsie","vakantie":"vakantsie",
+ "informatie":"informaatsie","actie":"aktsie","reactie":"reaktsie","emotie":"emootsie","logisch":"logies",
+ "elektrisch":"elektries","fantastisch":"fantasties","praktisch":"prakties","bagage":"bagaazje",
+ "etalage":"eetalaazje","spionage":"spionaazje","jury":"zjurie","genie":"zjenie","champignon":"sjampinjon",
+ "quiche":"kiesj","enquête":"ankwète","chique":"sjiek","mayonaise":"majonèze","route":"roete",
+ "medaille":"medalje","patrouille":"patroelje","limousine":"limoezine","coupé":"koepee","canapé":"kanapee",
+ "yoghurt":"joghurt","hyena":"hiejena","cyclus":"siklus","mythe":"miete","gymnastiek":"gimnastiek"
 };
 
-var voices=[], chosen=null, stopped=false;
-var marks={};   /* woord -> "goed" | "fout" | "resp" */
+var TYPEN={hoor:"hoorwoord",regel:"regelwoord",onthoud:"onthoudwoord"};
+var voices=[],chosen=null,stopped=false,mode="listen",marks={};
 
+/* ---------- data ---------- */
+function splitLid(w){
+  var m=String(w).match(/^(de|het|een)\s+(.+)$/i);
+  return m?{tts:w,answer:m[2]}:{tts:w,answer:w};
+}
+function slug(w){
+  return w.toLowerCase()
+    .replace(/[àáâä]/g,"a").replace(/[èéêë]/g,"e").replace(/[ìíîï]/g,"i")
+    .replace(/[òóôö]/g,"o").replace(/[ùúûü]/g,"u").replace(/ç/g,"c").replace(/ñ/g,"n")
+    .replace(/['’]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+}
+function rowsFor(g,type){
+  var out=[],seen={};
+  (g?[g]:[1,2,3]).forEach(function(gr){
+    TK.themesFor(gr).forEach(function(t){
+      if(type && t.type!==type) return;
+      var items=[];
+      (t.words||[]).forEach(function(w){
+        var pw=TK.parseWord(w,t.alts), L=splitLid(pw.word);
+        items.push({tts:L.tts,answer:L.answer});
+      });
+      (t.items||[]).forEach(function(it){
+        var s = it.z ? it.z.replace("___",it.a).replace(/ \./g,".") : it.a;
+        items.push({tts:s,answer:s,zin:true});
+      });
+      items.forEach(function(o){
+        var base=slug(o.answer), f=base, i=2;
+        while(seen[f]) f=base+"-"+(i++);
+        seen[f]=1; o.file=f; o.graad=gr; o.theme=t;
+      });
+      if(items.length) out.push({theme:t,graad:gr,items:items});
+    });
+  });
+  return out;
+}
+
+/* ---------- stem ---------- */
 function loadVoices(){
   voices=(speechSynthesis.getVoices()||[]).filter(function(v){
-    return (v.lang||"").toLowerCase().slice(0,2)==="nl";
-  });
-  var sel=document.getElementById("voice");
-  sel.innerHTML="";
-  if(!voices.length){
-    sel.innerHTML="<option>GEEN NEDERLANDSE STEM GEVONDEN</option>";
-    return;
-  }
+    return (v.lang||"").toLowerCase().slice(0,2)==="nl"; });
+  var s=document.getElementById("voice"); s.innerHTML="";
+  if(!voices.length){ s.innerHTML="<option>GEEN NEDERLANDSE STEM</option>"; return; }
   voices.sort(function(a,b){
-    var A=(a.lang||"").toLowerCase()==="nl-be"?0:1, B=(b.lang||"").toLowerCase()==="nl-be"?0:1;
-    return A-B;
-  });
+    return ((a.lang||"").toLowerCase()==="nl-be"?0:1)-((b.lang||"").toLowerCase()==="nl-be"?0:1); });
   voices.forEach(function(v,i){
-    var o=document.createElement("option");
-    o.value=i; o.textContent=v.lang+" — "+v.name;
-    sel.appendChild(o);
-  });
+    var o=document.createElement("option"); o.value=i; o.textContent=v.lang+" — "+v.name; s.appendChild(o); });
   chosen=voices[0];
-  sel.onchange=function(){ chosen=voices[+sel.value]; };
+  s.onchange=function(){ chosen=voices[+s.value]; };
 }
-loadVoices();
-speechSynthesis.onvoiceschanged=loadVoices;
+loadVoices(); speechSynthesis.onvoiceschanged=loadVoices;
 
 function say(text){
   return new Promise(function(res){
@@ -127,112 +165,146 @@ function say(text){
       var u=new SpeechSynthesisUtterance(/[.!?]$/.test(text)?text:text+".");
       u.voice=chosen; u.lang=chosen.lang;
       u.rate=parseFloat(document.getElementById("rate").value);
-      u.onend=res; u.onerror=res;
-      speechSynthesis.speak(u);
+      u.onend=res; u.onerror=res; speechSynthesis.speak(u);
     },70);
   });
 }
 
-function spokenFor(g){
-  var rows=[];
-  TK.themesFor(g).forEach(function(t){
-    var items=[];
-    (t.words||[]).forEach(function(w){ items.push(TK.parseWord(w,t.alts).word); });
-    (t.items||[]).forEach(function(it){
-      items.push(it.z ? it.z.replace("___",it.a).replace(/ \./g,".") : it.a);
-    });
-    rows.push({theme:t.label, items:items});
-  });
-  return rows;
-}
-
+/* ---------- render ---------- */
 function render(){
   var g=+document.getElementById("graad").value;
-  var host=document.getElementById("list"); host.innerHTML="";
-  var n=0;
-  spokenFor(g).forEach(function(grp){
-    var h=document.createElement("div"); h.className="theme"; h.textContent=grp.theme;
+  var ty=document.getElementById("type").value;
+  var groups=rowsFor(g,ty), host=document.getElementById("list");
+  host.innerHTML=""; var n=0;
+
+  groups.forEach(function(grp){
+    var h=document.createElement("div"); h.className="theme";
+    var b=document.createElement("span");
+    b.className="badge b-"+(grp.theme.type||"hoor");
+    b.textContent=(TYPEN[grp.theme.type]||"?");
+    h.appendChild(document.createTextNode("Graad "+grp.graad+" · "+grp.theme.label+" "));
+    h.appendChild(b);
+    var c=document.createElement("span"); c.className="count";
+    c.textContent=grp.items.length+" items"; h.appendChild(c);
     host.appendChild(h);
+
     var tb=document.createElement("table");
-    tb.innerHTML="<tr><th>woord / zin</th><th>voorstel</th><th></th><th>oordeel</th></tr>";
-    grp.items.forEach(function(w){
+    tb.innerHTML = mode==="rec"
+      ? "<tr><th>#</th><th>voorlezen</th><th>kind schrijft</th><th>bestandsnaam</th></tr>"
+      : "<tr><th>#</th><th>voorlezen</th><th>voorstel</th><th></th><th>oordeel</th></tr>";
+
+    grp.items.forEach(function(o){
       n++;
-      var resp=KANDIDAAT[w]||null;
       var tr=document.createElement("tr");
+      var td0=document.createElement("td"); td0.className="n"; td0.textContent=n;
+      var td1=document.createElement("td"); td1.className="w"; td1.textContent=o.tts;
+      tr.appendChild(td0); tr.appendChild(td1);
 
-      var td1=document.createElement("td"); td1.className="w"; td1.textContent=w;
-      var td2=document.createElement("td"); td2.className="r"; td2.textContent=resp||"—";
-
-      var td3=document.createElement("td");
-      var b1=document.createElement("button"); b1.className="small"; b1.textContent="🔊";
-      b1.onclick=function(){ say(w); };
-      td3.appendChild(b1);
-      if(resp){
-        var b2=document.createElement("button"); b2.className="small ghost"; b2.textContent="🔊 voorstel";
-        b2.style.marginLeft="6px";
-        b2.onclick=function(){ say(resp); };
-        td3.appendChild(b2);
+      if(mode==="rec"){
+        var td2=document.createElement("td"); td2.textContent=o.answer;
+        var td3=document.createElement("td"); td3.className="f"; td3.textContent=o.file+".mp3";
+        tr.appendChild(td2); tr.appendChild(td3);
+      } else {
+        var resp=KANDIDAAT[o.answer.toLowerCase()]||null;
+        var td2b=document.createElement("td"); td2b.className="r"; td2b.textContent=resp||"—";
+        var td3b=document.createElement("td");
+        var p=document.createElement("button"); p.className="small"; p.textContent="🔊";
+        p.onclick=function(){ say(o.tts); }; td3b.appendChild(p);
+        if(resp){
+          var p2=document.createElement("button"); p2.className="small ghost"; p2.textContent="🔊 voorstel";
+          p2.style.marginLeft="5px"; p2.onclick=function(){ say(resp); }; td3b.appendChild(p2);
+        }
+        var td4=document.createElement("td");
+        var box=document.createElement("div"); box.className="mark";
+        [["goed","✓",""],["fout","✗","bad"],["resp","★","resp"]].forEach(function(m){
+          if(m[0]==="resp"&&!resp) return;
+          var bt=document.createElement("button"); bt.className="small "+m[2]; bt.textContent=m[1];
+          if(marks[o.answer]===m[0]) bt.dataset.on="1";
+          bt.onclick=function(){
+            marks[o.answer]=(marks[o.answer]===m[0])?null:m[0]; render(); dump(); };
+          box.appendChild(bt);
+        });
+        td4.appendChild(box);
+        tr.appendChild(td2b); tr.appendChild(td3b); tr.appendChild(td4);
       }
-
-      var td4=document.createElement("td");
-      var box=document.createElement("div"); box.className="mark";
-      [["goed","✓",""],["fout","✗","bad"],["resp","★","resp"]].forEach(function(m){
-        if(m[0]==="resp" && !resp) return;
-        var b=document.createElement("button");
-        b.className="small "+m[2]; b.textContent=m[1];
-        b.onclick=function(){
-          marks[w]= (marks[w]===m[0]) ? null : m[0];
-          render(); dump();
-        };
-        if(marks[w]===m[0]) b.dataset.on="1";
-        box.appendChild(b);
-      });
-      td4.appendChild(box);
-
-      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
       tb.appendChild(tr);
     });
     host.appendChild(tb);
   });
-  document.getElementById("count").textContent = n+" items in deze graad";
+
+  document.getElementById("tot").textContent =
+    n+" opdrachten in beeld"+(g?" (graad "+g+")":" (alle graden)")+(ty?" · alleen "+TYPEN[ty]+"en":"");
+  document.getElementById("count").textContent="";
+  ["wVoice","wRate","playAll","stop"].forEach(function(id){
+    document.getElementById(id).style.display = mode==="rec" ? "none":"";
+  });
+  document.getElementById("out").parentNode.style.display = mode==="rec" ? "none":"";
 }
 
+/* ---------- afspelen ---------- */
 async function playAll(){
   stopped=false;
-  var g=+document.getElementById("graad").value;
-  var all=[];
-  spokenFor(g).forEach(function(grp){ grp.items.forEach(function(w){ all.push(w); }); });
+  var g=+document.getElementById("graad").value, ty=document.getElementById("type").value;
+  var all=[]; rowsFor(g,ty).forEach(function(gr){ gr.items.forEach(function(o){ all.push(o); }); });
   document.getElementById("playAll").disabled=true;
   for(var i=0;i<all.length;i++){
     if(stopped) break;
-    document.getElementById("count").textContent=(i+1)+" / "+all.length+" — "+all[i];
-    await say(all[i]);
-    await new Promise(function(r){ setTimeout(r,220); });
+    document.getElementById("count").textContent=(i+1)+" / "+all.length+" — "+all[i].tts;
+    await say(all[i].tts);
+    await new Promise(function(r){ setTimeout(r,200); });
   }
   document.getElementById("playAll").disabled=false;
-  render();
 }
 
+/* ---------- export ---------- */
 function dump(){
-  var fout=[], resp=[];
+  var fout=[],resp=[];
   Object.keys(marks).forEach(function(w){
     if(marks[w]==="fout") fout.push(w);
-    if(marks[w]==="resp") resp.push([w, KANDIDAAT[w]]);
+    if(marks[w]==="resp") resp.push([w,KANDIDAAT[w.toLowerCase()]]);
   });
-  var s="";
-  s+="/* Respelling goedgekeurd ("+resp.length+") — plak in SPRAAK in engine.js */\n";
+  var s="/* Respelling goedgekeurd ("+resp.length+") — plak in SPRAAK in engine.js */\n";
   resp.forEach(function(p){ s+='  "'+p[0]+'":"'+p[1]+'",\n'; });
-  s+="\n/* Klinkt fout, nog geen goede respelling ("+fout.length+") */\n";
+  s+="\n/* Klinkt fout, nog geen respelling ("+fout.length+") */\n";
   fout.forEach(function(w){ s+='  "'+w+'":"",\n'; });
   document.getElementById("out").value=s;
 }
+function csv(){
+  var g=+document.getElementById("graad").value, ty=document.getElementById("type").value;
+  var rows=[["nr","graad","thema","soort","voorlezen","kind_schrijft","bestandsnaam"]], n=0;
+  rowsFor(g,ty).forEach(function(gr){
+    gr.items.forEach(function(o){
+      n++;
+      rows.push([n,gr.graad,gr.theme.label,TYPEN[gr.theme.type]||"",o.tts,o.answer,o.file+".mp3"]);
+    });
+  });
+  var body=rows.map(function(r){
+    return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(";");
+  }).join("\r\n");
+  var blob=new Blob(["﻿"+body],{type:"text/csv;charset=utf-8"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="taalkrak-inspreeklijst"+(g?"-graad"+g:"")+(ty?"-"+ty:"")+".csv";
+  a.click(); URL.revokeObjectURL(a.href);
+}
 
-document.getElementById("graad").onchange=function(){ render(); };
+/* ---------- events ---------- */
+function setMode(m){
+  mode=m;
+  document.getElementById("modeL").setAttribute("aria-pressed",m==="listen");
+  document.getElementById("modeR").setAttribute("aria-pressed",m==="rec");
+  document.getElementById("modeL").className = m==="listen"?"":"ghost";
+  document.getElementById("modeR").className = m==="rec"?"":"ghost";
+  render();
+}
+document.getElementById("modeL").onclick=function(){ setMode("listen"); };
+document.getElementById("modeR").onclick=function(){ setMode("rec"); };
+document.getElementById("graad").onchange=render;
+document.getElementById("type").onchange=render;
 document.getElementById("playAll").onclick=playAll;
 document.getElementById("stop").onclick=function(){ stopped=true; speechSynthesis.cancel(); };
-document.getElementById("copy").onclick=function(){
-  var o=document.getElementById("out"); o.select(); document.execCommand("copy");
-};
+document.getElementById("csv").onclick=csv;
+document.getElementById("print").onclick=function(){ window.print(); };
 
 render(); dump();
 </script>
