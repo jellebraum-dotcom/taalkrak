@@ -261,17 +261,6 @@
 .speakbtn:active{transform:scale(.93)}
 .speakbtn--big{width:96px;height:96px;border-radius:28px;font-size:44px}
 
-/* luisterdictee: 🔊 normaal + 🐢 trager naast elkaar */
-.speakrow{display:flex;gap:14px;align-items:center;justify-content:center}
-.speakbtn--slow{width:62px;height:62px;border-radius:18px;font-size:26px;
-  background:linear-gradient(160deg,var(--sky),var(--sky-deep));opacity:.8}
-.speakbtn--slow:active{transform:scale(.93)}
-
-/* waarschuwing wanneer er geen Nederlandse stem beschikbaar is */
-.ttswarn{position:fixed;left:0;right:0;bottom:0;z-index:9999;padding:12px 16px;
-  background:var(--berry);color:#fff;font:600 15px/1.35 system-ui,sans-serif;
-  text-align:center;cursor:pointer}
-
 /* typveld */
 .inputrow{width:min(86vw,380px)}
 .spellinput{width:100%;border:2px solid var(--line);border-radius:18px;padding:16px 18px;
@@ -316,6 +305,27 @@
   .classbar .choices--words .choice{font-size:32px;min-height:78px}
   .classbar .choices--sent .choice{font-size:24px;min-height:70px}
 }
+
+/* ============ Leerkrachtpagina: leesbaar op een computerscherm ============
+   Deze pagina wordt bijna altijd op een laptop/pc bekeken, vaak met de
+   automatische donkere modus van de browser aan. Daarom krijgt de kop een
+   eigen donkere balk met witte tekst: die blijft in élke modus leesbaar. */
+.gen{max-width:1040px;padding-top:22px}
+.gen__head{background:#242640;border-radius:20px;padding:20px 24px;margin:0 0 22px;
+  box-shadow:0 10px 24px rgba(36,38,64,.22);gap:17px}
+.gen__head .logo{width:62px;height:62px;border-radius:18px;
+  box-shadow:0 4px 12px rgba(0,0,0,.28)}
+.gen__head .logo--taal span{font-size:27px}
+.gen__title{color:#fff;font-size:clamp(26px,3.2vw,34px);text-shadow:0 1px 2px rgba(0,0,0,.3)}
+.gen__sub{color:#D6D3E4;font-size:15.5px;font-weight:600;margin-top:5px}
+
+/* iets meer contrast in de panelen ernaast */
+.gen .block__label{font-size:16px}
+.gen .block__hint{color:#54566B}
+.gen .note{font-size:12.5px;color:#4A4C63}
+.gen .qrcard__cap{color:#4A4C63;font-size:13.5px}
+.gen .pill{background:#EDE4D2;color:#3E4055}
+.gen .form-opt__demo{font-size:14.5px}
 
 /* overzicht van de reeks op het eindscherm */
 .results{justify-content:flex-start;padding-top:44px}
