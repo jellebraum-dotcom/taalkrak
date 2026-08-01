@@ -447,13 +447,16 @@ if(typeof fetch==="function"){
     .then(function(j){ if(j && j.files) AUDIO=j.files; })
     .catch(function(){});
 }
-function playFile(file, slow){
+function playFile(file, text, slow){
   try{
     if(curAudio){ try{ curAudio.pause(); }catch(e){} }
     curAudio=new Audio(AUDIO_BASE+file);
     curAudio.playbackRate = slow? 0.8 : 1;
+    /* lukt het afspelen niet (bestand ontbreekt, nog niet gedownload, …),
+       dan alsnog de stem van het toestel gebruiken */
+    curAudio.onerror=function(){ speakBrowser(text, slow); };
     var p=curAudio.play();
-    if(p && p.catch) p.catch(function(){});
+    if(p && p.catch) p.catch(function(){ speakBrowser(text, slow); });
     return true;
   }catch(e){ return false; }
 }
@@ -477,7 +480,11 @@ if(typeof window!=="undefined" && window.speechSynthesis){
 function speak(text, slow){
   if(!soundOn) return false;
   /* eerst de meegeleverde opname proberen */
-  if(AUDIO && AUDIO[text] && playFile(AUDIO[text], slow)) return true;
+  if(AUDIO && AUDIO[text] && playFile(AUDIO[text], text, slow)) return true;
+  return speakBrowser(text, slow);
+}
+function speakBrowser(text, slow){
+  if(!soundOn) return false;
   if(typeof window==="undefined" || !window.speechSynthesis) return false;
   try{
     speechSynthesis.cancel();
