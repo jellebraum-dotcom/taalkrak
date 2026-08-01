@@ -428,11 +428,35 @@ function sDone(){ [523,659,784,1047].forEach(function(f,i){ beep(f,.18,"sine",.2
 function toggleSound(){
   soundOn=!soundOn;
   var b=document.getElementById("soundBtn"); if(b) b.textContent=soundOn?"🔊":"🔇";
-  if(!soundOn && window.speechSynthesis) speechSynthesis.cancel();
+  if(!soundOn){
+    if(typeof window!=="undefined" && window.speechSynthesis) speechSynthesis.cancel();
+    if(curAudio){ try{ curAudio.pause(); }catch(e){} }
+  }
   return soundOn;
 }
 
-/* ===================== VOORLEESSTEM (dictee) ===================== */
+/* ===================== VOORLEESSTEM (dictee) =====================
+   Als er vooraf ingesproken audio meegeleverd is (map "audio" met een
+   manifest.json), gebruiken we die: altijd dezelfde Vlaamse stem, ook
+   offline. Ontbreekt die map, dan valt de app terug op de stem van het
+   toestel zelf — de app blijft dus in elk geval werken. */
+var AUDIO=null, AUDIO_BASE="audio/", curAudio=null;
+if(typeof fetch==="function"){
+  fetch(AUDIO_BASE+"manifest.json")
+    .then(function(r){ return r.ok? r.json() : null; })
+    .then(function(j){ if(j && j.files) AUDIO=j.files; })
+    .catch(function(){});
+}
+function playFile(file, slow){
+  try{
+    if(curAudio){ try{ curAudio.pause(); }catch(e){} }
+    curAudio=new Audio(AUDIO_BASE+file);
+    curAudio.playbackRate = slow? 0.8 : 1;
+    var p=curAudio.play();
+    if(p && p.catch) p.catch(function(){});
+    return true;
+  }catch(e){ return false; }
+}
 var nlVoice=null;
 function findVoice(){
   if(typeof window==="undefined" || !window.speechSynthesis) return null;
@@ -451,7 +475,10 @@ if(typeof window!=="undefined" && window.speechSynthesis){
   speechSynthesis.onvoiceschanged=findVoice;
 }
 function speak(text, slow){
-  if(typeof window==="undefined" || !window.speechSynthesis || !soundOn) return false;
+  if(!soundOn) return false;
+  /* eerst de meegeleverde opname proberen */
+  if(AUDIO && AUDIO[text] && playFile(AUDIO[text], slow)) return true;
+  if(typeof window==="undefined" || !window.speechSynthesis) return false;
   try{
     speechSynthesis.cancel();
     var u=new SpeechSynthesisUtterance(text);
@@ -464,7 +491,9 @@ function speak(text, slow){
     return true;
   }catch(e){ return false; }
 }
-function ttsAvailable(){ return typeof window!=="undefined" && !!window.speechSynthesis; }
+function ttsAvailable(){
+  return !!AUDIO || (typeof window!=="undefined" && !!window.speechSynthesis);
+}
 
 /* ===================== SPELVERLOOP ===================== */
 var onExit=function(){};
