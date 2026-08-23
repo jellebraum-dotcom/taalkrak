@@ -15,7 +15,7 @@ De QR-codes en links uit de leerkracht-tool openen automatisch de leerlingapp me
 
 ## Leerlijn per graad
 
-**1e graad (L1–L2)** — hakwoorden (klankzuiver), tweetekenklanken (oe/eu/ui/ie), medeklinkerclusters, sch(r)-, ng/nk, aai/ooi/oei, eer/oor/eur, eeuw/ieuw, zinnen met hoofdletter en punt.
+**1e graad (L1–L2)** — hoorwoorden (klankzuiver), tweetekenklanken (oe/eu/ui/ie), medeklinkerclusters, sch(r)-, ng/nk, aai/ooi/oei, eer/oor/eur, eeuw/ieuw, zinnen met hoofdletter en punt.
 
 **2e graad (L3–L4)** — eind -d of -t (langer maken), verdubbelaar, verenkelaar, ei/ij, au/ou, verkleinwoorden, cht/gt, hoofdletters en leestekens.
 
