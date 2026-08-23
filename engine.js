@@ -17,7 +17,7 @@ var TK = (function(){
 
 var THEMES = {
 1:[
- {id:"hak", label:"Hakwoorden", sub:"vis · boom · kat", vormen:["dictee","keuze"],
+ {id:"hak", label:"Hoorwoorden", sub:"vis · boom · kat", vormen:["dictee","keuze"],
   mut:[["v","f"],["f","v"],["z","s"],["s","z"],["aa","a"],["oo","o"],["ee","e"],["uu","u"],["b","p"],["k","g"]],
   words:["vis","maan","boom","roos","vuur","bus","pen","kat","sok","bal","jas","mes","tak","pot","muur","boot","zon","kip","net","doos","wip","vel","bak","zak","pit","neef"]},
  {id:"twee", label:"Woorden met oe, eu, ui, ie", sub:"boek · deur · huis", vormen:["dictee","invul","keuze"], alts:["oe","eu","ui","ie"],
