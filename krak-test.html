@@ -19,29 +19,32 @@
   *{box-sizing:border-box}
   body{ margin:0; padding:24px 18px 64px; background:var(--grond); color:var(--inkt);
         font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
-  .wrap{ max-width:1000px; margin:0 auto; }
+  .wrap{ max-width:1060px; margin:0 auto; }
   h1{ font-size:1.5rem; margin:0 0 4px; }
   .sub{ color:var(--zacht); margin:0 0 22px; font-size:.94rem; }
   .rooster{ display:grid; grid-template-columns:1fr; gap:18px; }
-  @media (min-width:860px){ .rooster{ grid-template-columns:1.15fr 1fr; } }
+  @media (min-width:880px){ .rooster{ grid-template-columns:1.25fr 1fr; } }
   .kaart{ background:var(--vlak); border:1px solid var(--lijn); border-radius:10px; padding:18px 20px; }
   .kaart h2{ font-size:1.05rem; margin:0 0 14px; }
   label{ display:block; font-size:.82rem; color:var(--zacht); margin:12px 0 4px; }
   input{ width:100%; padding:9px 11px; font:inherit; color:inherit;
          background:var(--grond); border:1px solid var(--lijn); border-radius:7px; }
-  input.mono{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.86rem; }
+  input.mono{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.84rem; }
   button{ font:inherit; font-weight:600; padding:9px 15px; border-radius:7px; cursor:pointer;
           border:1px solid var(--accent); background:var(--accent); color:#fff; }
   button.stil{ background:transparent; color:var(--accent); }
+  button.klein{ padding:5px 10px; font-size:.85rem; }
   button:disabled{ opacity:.42; cursor:not-allowed; }
   .knoppen{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
   .code{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:2rem; font-weight:700;
          letter-spacing:.16em; color:var(--accent); background:var(--accent-vlak);
          padding:10px 16px; border-radius:8px; display:inline-block; margin:6px 0; }
-  table{ border-collapse:collapse; width:100%; margin-top:10px; font-size:.94rem; }
-  th,td{ text-align:left; padding:6px 10px 6px 0; border-bottom:1px solid var(--lijn); }
+  table{ border-collapse:collapse; width:100%; margin-top:10px; font-size:.93rem; }
+  th,td{ text-align:left; padding:6px 10px 6px 0; border-bottom:1px solid var(--lijn);
+         vertical-align:top; }
   th{ font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color:var(--zacht); }
   td.num{ font-variant-numeric:tabular-nums; }
+  td.fouten{ color:var(--fout); font-size:.86rem; }
   .melding{ margin-top:14px; padding:10px 13px; border-radius:7px; font-size:.9rem;
             border:1px solid var(--lijn); background:var(--grond); }
   .melding.goed{ color:var(--goed); border-color:currentColor; }
@@ -51,39 +54,50 @@
   .tip{ font-size:.85rem; color:var(--zacht); margin-top:18px; }
   .rondekop{ display:flex; align-items:baseline; gap:10px; margin-top:18px; }
   .rondekop h3{ font-size:.98rem; margin:0; }
-  .cfg{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.76rem; color:var(--zacht);
+  .cfg{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.75rem; color:var(--zacht);
         overflow-wrap:anywhere; }
   details{ margin-top:14px; border-top:1px solid var(--lijn); padding-top:10px; }
   summary{ cursor:pointer; font-size:.9rem; color:var(--zacht); }
   .wacht{ text-align:center; padding:22px 10px; }
   .wacht .groot{ font-size:1.6rem; margin-bottom:6px; }
+  ul.lijst{ list-style:none; padding:0; margin:10px 0 0; }
+  ul.lijst li{ display:flex; align-items:center; gap:10px; justify-content:space-between;
+               padding:9px 0; border-bottom:1px solid var(--lijn); }
+  ul.lijst .wat{ min-width:0; }
+  ul.lijst .titel{ font-weight:600; }
+  ul.lijst .meta{ font-size:.82rem; color:var(--zacht); }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Krak — sessietest</h1>
-  <p class="sub">Los van Taalkrak en Rekenkrak. Eén sessie, meerdere oefeningen: de juf start een ronde, de leerlingtoestellen schakelen vanzelf mee.</p>
+  <p class="sub">Los van Taalkrak en Rekenkrak. Eén sessie per les met meerdere oefeningen, en achteraf raadpleegbaar — inclusief welke items fout gingen.</p>
 
   <div id="configFout" class="melding fout" style="display:none"></div>
 
   <div class="rooster">
     <div class="kaart">
       <h2>Leerkracht</h2>
+
       <div id="jufLeeg">
-        <p class="leeg">Nog geen sessie op dit toestel.</p>
-        <div class="knoppen"><button id="btnStart">Start testsessie</button></div>
+        <div class="knoppen"><button id="btnStart">Start nieuwe sessie</button></div>
+        <div id="archief"></div>
       </div>
+
       <div id="jufActief" style="display:none">
-        <div>Sessiecode</div>
+        <div class="knoppen"><button id="btnTerug" class="stil klein">← Mijn sessies</button></div>
+        <div style="margin-top:10px">Sessiecode</div>
         <div class="code" id="uitCode">····</div>
         <div id="uitStatus" class="leeg"></div>
+
+        <label for="uitLink">Bewaar deze link om er later op eender welk toestel bij te kunnen</label>
+        <input id="uitLink" class="mono" readonly>
 
         <label for="inCfg">Instellingen voor de volgende oefening</label>
         <input id="inCfg" class="mono" value="#g=1&amp;th=hak&amp;v=dictee&amp;n=10&amp;t=0&amp;m=s">
         <div class="knoppen">
           <button id="btnRonde">Start oefening</button>
           <button id="btnStop" class="stil">Beëindig sessie</button>
-          <button id="btnVergeet" class="stil">Vergeet op dit toestel</button>
         </div>
 
         <div id="rondes"></div>
@@ -118,13 +132,13 @@
           </div>
         </div>
 
-        <div class="knoppen"><button id="btnWeg" class="stil">Verlaat</button></div>
+        <div class="knoppen"><button id="btnWeg" class="stil klein">Verlaat</button></div>
       </div>
       <div id="lrlMelding"></div>
     </div>
   </div>
 
-  <p class="tip">Echte test: deze pagina op je laptop als leerkracht, en op je gsm of in een privévenster als leerling. Start een oefening, laat de leerling wat antwoorden, en start dan een tweede oefening — het leerlingtoestel hoort binnen twee seconden vanzelf over te schakelen. Duw als leerkracht gerust op F5.</p>
+  <p class="tip">Echte test: deze pagina op je laptop als leerkracht, en op je gsm of in een privévenster als leerling. Start twee oefeningen na elkaar, laat de leerling een paar fouten maken, beëindig de sessie en klik dan op ← Mijn sessies — je zou de sessie moeten terugvinden mét de foutenlijst per leerling.</p>
 </div>
 
 <script src="krak-config.js"></script>
@@ -133,8 +147,10 @@
 (function(){
   "use strict";
   var $ = function(id){ return document.getElementById(id); };
-  var juist = 0, totaal = 0, mijnRonde = 0;
+  var juist = 0, totaal = 0, mijnRonde = 0, mijnFouten = [];
   var stopVolgen = null, stopOpdracht = null;
+
+  var WOORDEN = ["trein","ijs","fiets","boom","schaap","muur","kabouter","geit"];
 
   if(!KrakSessie.ingesteld()){
     var m = $("configFout");
@@ -150,6 +166,13 @@
     if(txt != null) e.textContent = txt;
     return e;
   }
+  function datumKort(iso){
+    if(!iso) return "";
+    var d = new Date(iso);
+    if(isNaN(d)) return "";
+    return d.toLocaleDateString("nl-BE", {day:"numeric", month:"short"}) + " " +
+           d.toLocaleTimeString("nl-BE", {hour:"2-digit", minute:"2-digit"});
+  }
 
   /* ---------- leerkracht ---------- */
 
@@ -157,18 +180,56 @@
     var s = KrakSessie.lopendeSessie();
     $("jufLeeg").style.display   = s ? "none"  : "block";
     $("jufActief").style.display = s ? "block" : "none";
-    if(!s){ if(stopVolgen){ stopVolgen(); stopVolgen = null; } return; }
+    if(!s){
+      if(stopVolgen){ stopVolgen(); stopVolgen = null; }
+      tekenArchief();
+      return;
+    }
     $("uitCode").textContent = s.code;
+    $("uitLink").value = KrakSessie.beheerLink(location.href, s.beheer) || "";
     if(!stopVolgen){
       $("uitStatus").textContent = "Verbinden…";
       stopVolgen = KrakSessie.volg(tekenStand, tekenJufFout, 2000);
     }
   }
 
+  function tekenArchief(){
+    var host = $("archief");
+    host.innerHTML = "";
+    var lijst = KrakSessie.mijnSessies();
+    if(!lijst.length){
+      host.appendChild(el("p", "leeg", "Nog geen sessies op dit toestel."));
+      return;
+    }
+    host.appendChild(el("p", "leeg", "Mijn sessies — dertig dagen raadpleegbaar"));
+    var ul = el("ul", "lijst");
+    lijst.forEach(function(s){
+      var li = el("li");
+      var wat = el("div", "wat");
+      wat.appendChild(el("div", "titel", s.code + (s.titel ? " · " + s.titel : "")));
+      wat.appendChild(el("div", "meta", datumKort(s.datum)));
+      li.appendChild(wat);
+      var b = el("button", "stil klein", "Bekijk");
+      b.type = "button";
+      b.setAttribute("data-beheer", s.beheer);
+      b.onclick = function(){ KrakSessie.kiesSessie(s.beheer); toonJuf(); };
+      li.appendChild(b);
+      ul.appendChild(li);
+    });
+    host.appendChild(ul);
+  }
+
+  function foutenTekst(fouten){
+    if(!fouten || !fouten.length) return "";
+    return fouten.map(function(f){
+      return f.a ? (f.v + " → " + f.a) : f.v;
+    }).join(", ");
+  }
+
   function standTabel(standen){
     var t = el("table");
     var thead = el("thead"), trh = el("tr");
-    ["Naam","Juist","Gemaakt","Klaar"].forEach(function(k){ trh.appendChild(el("th", null, k)); });
+    ["Naam","Juist","Gemaakt","Klaar","Fout gegaan"].forEach(function(k){ trh.appendChild(el("th", null, k)); });
     thead.appendChild(trh); t.appendChild(thead);
     var tb = el("tbody");
     standen.forEach(function(l){
@@ -177,6 +238,7 @@
       tr.appendChild(el("td", "num", String(l.juist)));
       tr.appendChild(el("td", "num", String(l.totaal)));
       tr.appendChild(el("td", l.klaar ? "num vink" : "num", l.klaar ? "✓" : "—"));
+      tr.appendChild(el("td", "fouten", foutenTekst(l.fouten)));
       tb.appendChild(tr);
     });
     t.appendChild(tb);
@@ -188,7 +250,8 @@
     $("uitStatus").textContent =
       (ov.actief ? "Sessie loopt" : "Sessie beëindigd") +
       " · " + n + " leerling" + (n===1?"":"en") +
-      " · " + (ov.huidige_ronde ? "oefening " + ov.huidige_ronde : "nog geen oefening");
+      " · " + (ov.huidige_ronde ? "oefening " + ov.huidige_ronde : "nog geen oefening") +
+      (ov.aangemaakt_op ? " · " + datumKort(ov.aangemaakt_op) : "");
     $("btnStop").disabled  = !ov.actief;
     $("btnRonde").disabled = !ov.actief;
     $("btnRonde").textContent = ov.huidige_ronde ? "Start volgende oefening" : "Start oefening";
@@ -229,6 +292,12 @@
       .catch(function(f){ alert("Starten lukte niet: " + f.message); })
       .then(function(){ $("btnStart").disabled = false; });
   };
+  $("btnTerug").onclick = function(){
+    if(stopVolgen){ stopVolgen(); stopVolgen = null; }
+    KrakSessie.sluitSessie();
+    try{ if(location.hash.indexOf("beheer=") > -1) history.replaceState(null, "", location.pathname); }catch(e){}
+    toonJuf();
+  };
   $("btnRonde").onclick = function(){
     var cfg = ($("inCfg").value || "").trim();
     this.disabled = true;
@@ -236,8 +305,7 @@
       .catch(function(f){ alert("Oefening starten lukte niet: " + f.message); })
       .then(function(){ $("btnRonde").disabled = false; });
   };
-  $("btnStop").onclick    = function(){ KrakSessie.beeindig(); };
-  $("btnVergeet").onclick = function(){ KrakSessie.vergeetSessie(); toonJuf(); };
+  $("btnStop").onclick = function(){ KrakSessie.beeindig(); };
 
   /* ---------- leerling ---------- */
 
@@ -259,7 +327,6 @@
     if(!stopOpdracht) stopOpdracht = KrakSessie.volgOpdracht(nieuweOpdracht, 2000);
   }
 
-  /* Wordt alleen aangeroepen als er écht iets verandert. */
   function nieuweOpdracht(st){
     if(!st.gevonden){ melding("Deze sessie bestaat niet meer.", "fout"); return; }
     if(!st.actief){
@@ -276,9 +343,8 @@
       $("lrlWachtTekst").textContent = "Wacht even — de juf zet de oefening klaar.";
       return;
     }
-    /* nieuwe ronde: teller op nul en beginnen */
     mijnRonde = st.nummer;
-    juist = 0; totaal = 0;
+    juist = 0; totaal = 0; mijnFouten = [];
     $("lrlWacht").style.display = "none";
     $("lrlBezig").style.display = "block";
     $("lrlRonde").textContent = "Oefening " + st.nummer;
@@ -291,7 +357,7 @@
     var naam = ($("inNaam").value||"").trim();
     melding("");
     KrakSessie.join(code, naam).then(function(){
-      juist = 0; totaal = 0; mijnRonde = 0;
+      juist = 0; totaal = 0; mijnRonde = 0; mijnFouten = [];
       try{ location.hash = "ls=" + code; }catch(e){}
       toonLeerling();
     }).catch(function(f){
@@ -303,15 +369,20 @@
 
   function antwoord(goed){
     if(!mijnRonde) return;
-    totaal++; if(goed) juist++;
+    totaal++;
+    if(goed){ juist++; }
+    else {
+      var w = WOORDEN[(totaal - 1) % WOORDEN.length];
+      mijnFouten.push({ v: w, a: w.slice(0, -1) + "x" });
+    }
     $("lrlStand").textContent = juist + " / " + totaal;
-    KrakSessie.meld(mijnRonde, juist, totaal, false);
+    KrakSessie.meld(mijnRonde, juist, totaal, false, mijnFouten);
   }
   $("btnJuist").onclick = function(){ antwoord(true); };
   $("btnFout").onclick  = function(){ antwoord(false); };
   $("btnKlaar").onclick = function(){
     if(!mijnRonde) return;
-    KrakSessie.meld(mijnRonde, juist, totaal, true).then(function(gelukt){
+    KrakSessie.meld(mijnRonde, juist, totaal, true, mijnFouten).then(function(gelukt){
       melding(gelukt === false ? "Kon niet doorsturen — loopt de sessie nog?" : "Eindstand doorgestuurd.",
               gelukt === false ? "fout" : "goed");
     });
@@ -320,7 +391,7 @@
     var code = ($("inCode").value||"").trim().toUpperCase();
     if(stopOpdracht){ stopOpdracht(); stopOpdracht = null; }
     KrakSessie.verlaat(code);
-    juist = 0; totaal = 0; mijnRonde = 0;
+    juist = 0; totaal = 0; mijnRonde = 0; mijnFouten = [];
     melding(""); toonLeerling();
   };
 
@@ -328,8 +399,10 @@
 
   var uitLink = KrakSessie.codeUitHash();
   if(uitLink) $("inCode").value = uitLink;
-  toonJuf();
-  toonLeerling();
+
+  KrakSessie.herstelUitLink()
+    .catch(function(){ return null; })
+    .then(function(){ toonJuf(); toonLeerling(); });
 })();
 </script>
 </body>

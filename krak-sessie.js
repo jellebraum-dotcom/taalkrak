@@ -1,5 +1,5 @@
 /* ============================================================
-   Krak — sessielaag voor Taalkrak en Rekenkrak   (versie 2)
+   Krak — sessielaag voor Taalkrak en Rekenkrak   (versie 3)
    ------------------------------------------------------------
    Praat met Supabase via gewone fetch-oproepen naar de RPC-functies.
    Geen SDK, geen CDN, geen build-stap: past bij de rest van de app en
@@ -22,7 +22,8 @@ var KrakSessie = (function(){
 "use strict";
 
 var CFG = (typeof window!=="undefined" && window.KRAK_CONFIG) || null;
-var SLEUTEL_BEHEER = "krak.beheer";
+var SLEUTEL_BEHEER  = "krak.beheer";   /* de sessie die nu open staat */
+var SLEUTEL_ARCHIEF = "krak.sessies";  /* alle sessies van deze leerkracht  */
 var VOORVOEGSEL_DEELNAME = "krak.deelname.";
 
 /* ---------- basis ---------- */
@@ -87,6 +88,20 @@ function codeUitHash(bron){
   return (gevonden && /^[A-Z0-9]{4}$/.test(gevonden)) ? gevonden : null;
 }
 
+function beheerUitHash(bron){
+  var str = bron;
+  if(str == null) str = (typeof location !== "undefined" ? location.hash : "");
+  if(!str) return null;
+  var i = String(str).indexOf("#");
+  if(i > -1) str = String(str).slice(i + 1);
+  var gevonden = null;
+  String(str).split("&").forEach(function(deel){
+    var m = deel.split("=");
+    if(m[0] === "beheer" && m[1]) gevonden = decodeURIComponent(m[1]);
+  });
+  return (gevonden && /^[0-9a-f-]{36}$/i.test(gevonden)) ? gevonden : null;
+}
+
 function codeInLink(url, code){
   if(!code) return url;
   if(String(url).indexOf("ls=") > -1) return url;
@@ -102,10 +117,32 @@ function start(app, titel){
     .then(function(rijen){
       var r = rijen && rijen[0];
       if(!r || !r.code) throw new Error("sessie_niet_aangemaakt");
-      var s = { code: r.code, beheer: r.beheer_token, app: app };
+      var s = { code: r.code, beheer: r.beheer_token, app: app,
+                titel: titel || null, datum: new Date().toISOString() };
+      bewaarInArchief(s);
       zet(SLEUTEL_BEHEER, s);
       return s;
     });
+}
+
+/* ---------- archief: alle sessies van deze leerkracht ---------- */
+
+function mijnSessies(){
+  var l = haal(SLEUTEL_ARCHIEF);
+  return (l && l.length) ? l : [];
+}
+
+function bewaarInArchief(s){
+  var l = mijnSessies().filter(function(x){ return x.beheer !== s.beheer; });
+  l.unshift(s);
+  if(l.length > 50) l = l.slice(0, 50);
+  zet(SLEUTEL_ARCHIEF, l);
+}
+
+function uitArchief(beheer){
+  zet(SLEUTEL_ARCHIEF, mijnSessies().filter(function(x){ return x.beheer !== beheer; }));
+  var open = haal(SLEUTEL_BEHEER);
+  if(open && open.beheer === beheer) wis(SLEUTEL_BEHEER);
 }
 
 function lopendeSessie(){
@@ -113,7 +150,44 @@ function lopendeSessie(){
   return (s && s.beheer && s.code) ? s : null;
 }
 
-function vergeetSessie(){ wis(SLEUTEL_BEHEER); }
+/* Een sessie uit het archief openen. */
+function kiesSessie(beheer){
+  var s = null;
+  mijnSessies().forEach(function(x){ if(x.beheer === beheer) s = x; });
+  if(s) zet(SLEUTEL_BEHEER, s);
+  return s;
+}
+
+/* De open sessie sluiten. Ze blijft in het archief staan. */
+function sluitSessie(){ wis(SLEUTEL_BEHEER); }
+
+/* Alles van deze leerkracht op dit toestel wissen. */
+function vergeetSessie(beheer){
+  if(beheer) uitArchief(beheer);
+  else { wis(SLEUTEL_BEHEER); wis(SLEUTEL_ARCHIEF); }
+}
+
+/* Link om te bookmarken of naar jezelf te mailen. Werkt op elk toestel. */
+function beheerLink(basis, beheer){
+  var b = beheer || (lopendeSessie() || {}).beheer;
+  if(!b) return null;
+  var u = String(basis || (typeof location !== "undefined" ? location.href : ""));
+  u = u.split("#")[0];
+  return u + "#beheer=" + b;
+}
+
+/* Staat er een beheer-token in de link? Dan die sessie ophalen en bewaren. */
+function herstelUitLink(bron){
+  var b = beheerUitHash(bron);
+  if(!b) return Promise.resolve(null);
+  return rpc("sessie_overzicht", { p_beheer_token: b }).then(function(ov){
+    var s = { code: ov.code, beheer: b, app: ov.app,
+              titel: ov.titel, datum: ov.aangemaakt_op };
+    bewaarInArchief(s);
+    zet(SLEUTEL_BEHEER, s);
+    return s;
+  });
+}
 
 /* Volgende oefening starten. config is de instellingenhash van de app zelf,
    bv. "#g=1&th=hak&v=dictee&n=10&t=0&m=s". Geeft het rondenummer terug. */
@@ -129,7 +203,7 @@ function overzicht(){
   return rpc("sessie_overzicht", { p_beheer_token: s.beheer })
     .catch(function(f){
       /* De sessie is uit de database verdwenen (opgekuist): vergeet ze ook hier. */
-      if(f && f.message === "sessie_niet_gevonden"){ vergeetSessie(); return null; }
+      if(f && f.message === "sessie_niet_gevonden"){ uitArchief(s.beheer); return null; }
       throw f;
     });
 }
@@ -223,10 +297,11 @@ function volgOpdracht(bij, ms){
    seconde, behalve de eindstand en het wisselen van ronde — die gaan meteen. */
 var laatsteDuw = 0, wachtend = null, duwTimer = null;
 
-function meld(ronde, juist, totaal, klaar){
+function meld(ronde, juist, totaal, klaar, fouten){
   var d = deelname();
   if(!d) return Promise.resolve(false);
-  var nieuw = { token: d.token, ronde: ronde|0, juist: juist|0, totaal: totaal|0, klaar: !!klaar };
+  var nieuw = { token: d.token, ronde: ronde|0, juist: juist|0, totaal: totaal|0,
+                klaar: !!klaar, fouten: (fouten && fouten.length) ? fouten : [] };
 
   /* Nog iets open staan van een andere ronde? Dat eerst wegschrijven,
      anders gaat de stand van de vorige oefening verloren. */
@@ -252,7 +327,7 @@ function duw(){
   laatsteDuw = Date.now();
   return rpc("voortgang_bijwerken", {
     p_token: p.token, p_ronde: p.ronde,
-    p_juist: p.juist, p_totaal: p.totaal, p_klaar: p.klaar
+    p_juist: p.juist, p_totaal: p.totaal, p_klaar: p.klaar, p_fouten: p.fouten
   }).catch(function(){ return false; });
 }
 
@@ -266,7 +341,13 @@ return {
   start: start,
   rondeStart: rondeStart,
   lopendeSessie: lopendeSessie,
+  mijnSessies: mijnSessies,
+  kiesSessie: kiesSessie,
+  sluitSessie: sluitSessie,
   vergeetSessie: vergeetSessie,
+  beheerLink: beheerLink,
+  beheerUitHash: beheerUitHash,
+  herstelUitLink: herstelUitLink,
   overzicht: overzicht,
   volg: volg,
   beeindig: beeindig,
