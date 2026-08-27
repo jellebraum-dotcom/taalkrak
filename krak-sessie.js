@@ -29,11 +29,21 @@ function ingesteld(){
             String(CFG.sleutel).indexOf("VUL_HIER") < 0);
 }
 
+/* De "Connect"-knop van Supabase geeft de URL soms mét /rest/v1 erachter.
+   Dat stuk plakken we zelf, dus halen we het er hier af — anders krijg je
+   "Invalid path specified in request URL". */
+function basisUrl(){
+  return String(CFG.url || "").trim()
+    .replace(/\/+$/, "")
+    .replace(/\/rest\/v1$/i, "")
+    .replace(/\/+$/, "");
+}
+
 function rpc(naam, params){
   if(!ingesteld()){
     return Promise.reject(new Error("krak-config.js is nog niet ingevuld"));
   }
-  var basis = String(CFG.url).replace(/\/+$/, "");
+  var basis = basisUrl();
   return fetch(basis + "/rest/v1/rpc/" + naam, {
     method: "POST",
     headers: {

@@ -22,6 +22,6 @@
    ============================================================ */
 
 window.KRAK_CONFIG = {
-  url:     "https://avnxhqxtusfwwjspeosh.supabase.co/rest/v1/",
+  url:     "https://avnxhqxtusfwwjspeosh.supabase.co",
   sleutel: "sb_publishable_KNjHNHkEaP9tjg081jAuyA_9uEEm-ag"
 };
