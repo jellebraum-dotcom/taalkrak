@@ -19,6 +19,9 @@
             border:2px solid rgba(0,0,0,.12); border-radius:14px; background:#fff; }
 .naaminput:focus{ outline:none; border-color:#2FA8C6; }
 .naamfout{ color:#B23A2A; font-weight:600; }
+.bigcard--code .bigcard__ic{ background:#FFF3D6; }
+.codeinput{ text-transform:uppercase; letter-spacing:.32em; text-align:center;
+            font-weight:800; font-size:30px; font-family:ui-monospace,Menlo,Consolas,monospace; }
 .wachtkamer{ min-height:100dvh; display:flex; flex-direction:column; align-items:center;
              justify-content:center; text-align:center; padding:32px 24px; gap:6px; }
 .wachtkamer__emo{ font-size:64px; line-height:1; margin-bottom:6px; }
@@ -39,6 +42,10 @@
     <button class="bigcard bigcard--self" id="goSelf" type="button">
       <span class="bigcard__ic" aria-hidden="true">✏️</span>
       <span class="bigcard__tx"><b>Zelf oefenen</b><span>Kies je graad en je onderwerpen zelf</span></span>
+    </button>
+    <button class="bigcard bigcard--code" id="goCode" type="button">
+      <span class="bigcard__ic" aria-hidden="true">👩‍🏫</span>
+      <span class="bigcard__tx"><b>Doe mee met de klas</b><span>Vul de code in die de juf of meester toont</span></span>
     </button>
     <button class="bigcard bigcard--scan" id="goScan" type="button">
       <span class="bigcard__ic" aria-hidden="true">📷</span>
@@ -79,10 +86,16 @@
 <!-- ============ KLASSESSIE: HOE HEET JE? ============ -->
 <main class="setup hidden" id="screenNaam">
   <div class="setup__head">
-    <h2 class="setup__title">Hoe heet je?</h2>
+    <button class="backbtn" id="naamBack" type="button" aria-label="Terug">←</button>
+    <h2 class="setup__title">Doe mee met de klas</h2>
   </div>
   <section class="panel">
-    <p class="note">Zo weet je juf of meester wie er meedoet. Je voornaam volstaat.</p>
+    <div id="codeRij">
+      <p class="note">Vul de code in die je juf of meester toont.</p>
+      <input class="naaminput codeinput" id="codeInput" maxlength="4" autocomplete="off"
+             autocapitalize="characters" spellcheck="false" placeholder="ABCD" aria-label="Code van de klas">
+    </div>
+    <p class="note">Hoe heet je? Je voornaam volstaat — zo weet je juf of meester wie meedoet.</p>
     <input class="naaminput" id="naamInput" maxlength="30" autocomplete="off"
            autocapitalize="words" placeholder="Bijvoorbeeld: Lars" aria-label="Je voornaam">
     <p class="note naamfout hidden" id="naamFout"></p>
@@ -129,8 +142,8 @@
 "use strict";
 var $=function(s){return document.querySelector(s);};
 var SETUP = TK.defaults();
-var sessieCode = (typeof KrakSessie!=="undefined" && KrakSessie.ingesteld())
-                 ? KrakSessie.codeUitHash() : null;
+var K_AAN = (typeof KrakSessie!=="undefined" && KrakSessie.ingesteld());
+var sessieCode = K_AAN ? KrakSessie.codeUitHash() : null;
 var stopOpdracht = null;
 
 function hideAll(){ ["#screenHome","#screenSetup","#screenScan","#screenPlay","#screenDone","#screenNaam","#screenWacht"].forEach(function(id){ $(id).classList.add("hidden"); }); }
@@ -212,10 +225,14 @@ if("serviceWorker" in navigator){ window.addEventListener("load",function(){ nav
    seconden of er een nieuwe oefening klaarstaat en schakelt dan mee over. */
 function toonNaam(fout){
   hideAll(); $("#screenNaam").classList.remove("hidden");
+  var kenCode = !!sessieCode;
+  $("#codeRij").classList.toggle("hidden", kenCode);
   var f=$("#naamFout");
   if(fout){ f.textContent=fout; f.classList.remove("hidden"); } else f.classList.add("hidden");
   window.scrollTo(0,0);
-  setTimeout(function(){ try{ $("#naamInput").focus(); }catch(e){} }, 60);
+  setTimeout(function(){
+    try{ (kenCode? $("#naamInput") : $("#codeInput")).focus(); }catch(e){}
+  }, 60);
 }
 function toonWacht(titel, tekst, emo){
   hideAll(); $("#screenWacht").classList.remove("hidden");
@@ -248,19 +265,36 @@ function volgSessie(){
   }, 2000);
 }
 $("#naamOk").onclick=function(){
+  if(!sessieCode){
+    var ingetikt=($("#codeInput").value||"").trim().toUpperCase();
+    if(!/^[A-Z0-9]{4}$/.test(ingetikt)) return toonNaam("De code bestaat uit vier tekens, bijvoorbeeld ABCD.");
+    sessieCode=ingetikt;
+  }
   var naam=($("#naamInput").value||"").trim();
-  if(!naam) return toonNaam("Vul eerst je voornaam in.");
+  if(!naam) return toonNaam("Vul ook je voornaam in.");
   var knop=this; knop.disabled=true;
   KrakSessie.join(sessieCode, naam)
-    .then(function(){ volgSessie(); })
+    .then(function(){
+      /* code in de adresbalk: dan blijft het kind in de sessie na een verversing */
+      try{ if(!KrakSessie.codeUitHash()) location.hash="ls="+sessieCode; }catch(e){}
+      volgSessie();
+    })
     .catch(function(f){
-      toonNaam(f.message==="sessie_niet_gevonden" ? "Deze code werkt niet meer. Vraag je juf of meester."
-             : f.message==="ongeldige_voornaam"   ? "Vul eerst je voornaam in."
+      var uitLink = !!KrakSessie.codeUitHash();
+      if(f.message==="sessie_niet_gevonden" && !uitLink) sessieCode=null;  /* code opnieuw laten intikken */
+      toonNaam(f.message==="sessie_niet_gevonden" ? "Die code kennen we niet (meer). Kijk nog eens goed."
+             : f.message==="ongeldige_voornaam"   ? "Vul ook je voornaam in."
              : "Meedoen lukte niet. Probeer het nog eens.");
     })
     .then(function(){ knop.disabled=false; });
 };
 $("#naamInput").addEventListener("keydown", function(e){ if(e.key==="Enter") $("#naamOk").click(); });
+$("#codeInput").addEventListener("keydown", function(e){ if(e.key==="Enter") $("#naamInput").focus(); });
+$("#naamBack").onclick=function(){ if(!KrakSessie.codeUitHash()) sessieCode=null; goHome(); };
+$("#goCode").onclick=function(){
+  if(!K_AAN){ return alert("Live sessies zijn hier nog niet ingesteld."); }
+  TK.resumeAudio(); sessieCode=null; $("#codeInput").value=""; $("#naamInput").value=""; toonNaam("");
+};
 $("#wachtWeg").onclick=function(){
   if(stopOpdracht){ stopOpdracht(); stopOpdracht=null; }
   KrakSessie.verlaat(sessieCode);
@@ -270,6 +304,7 @@ $("#wachtWeg").onclick=function(){
 };
 
 /* ---------- opstarten ---------- */
+if(!K_AAN) $("#goCode").classList.add("hidden");
 if(sessieCode){ startSessie(); }
 else {
   var cfg=TK.parseParams(location.hash);
