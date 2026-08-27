@@ -19,16 +19,17 @@
   *{box-sizing:border-box}
   body{ margin:0; padding:24px 18px 64px; background:var(--grond); color:var(--inkt);
         font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
-  .wrap{ max-width:960px; margin:0 auto; }
+  .wrap{ max-width:1000px; margin:0 auto; }
   h1{ font-size:1.5rem; margin:0 0 4px; }
   .sub{ color:var(--zacht); margin:0 0 22px; font-size:.94rem; }
   .rooster{ display:grid; grid-template-columns:1fr; gap:18px; }
-  @media (min-width:820px){ .rooster{ grid-template-columns:1fr 1fr; } }
+  @media (min-width:860px){ .rooster{ grid-template-columns:1.15fr 1fr; } }
   .kaart{ background:var(--vlak); border:1px solid var(--lijn); border-radius:10px; padding:18px 20px; }
   .kaart h2{ font-size:1.05rem; margin:0 0 14px; }
   label{ display:block; font-size:.82rem; color:var(--zacht); margin:12px 0 4px; }
   input{ width:100%; padding:9px 11px; font:inherit; color:inherit;
          background:var(--grond); border:1px solid var(--lijn); border-radius:7px; }
+  input.mono{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.86rem; }
   button{ font:inherit; font-weight:600; padding:9px 15px; border-radius:7px; cursor:pointer;
           border:1px solid var(--accent); background:var(--accent); color:#fff; }
   button.stil{ background:transparent; color:var(--accent); }
@@ -37,24 +38,31 @@
   .code{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:2rem; font-weight:700;
          letter-spacing:.16em; color:var(--accent); background:var(--accent-vlak);
          padding:10px 16px; border-radius:8px; display:inline-block; margin:6px 0; }
-  table{ border-collapse:collapse; width:100%; margin-top:14px; font-size:.94rem; }
-  th,td{ text-align:left; padding:7px 10px 7px 0; border-bottom:1px solid var(--lijn); }
-  th{ font-size:.74rem; text-transform:uppercase; letter-spacing:.08em; color:var(--zacht); }
+  table{ border-collapse:collapse; width:100%; margin-top:10px; font-size:.94rem; }
+  th,td{ text-align:left; padding:6px 10px 6px 0; border-bottom:1px solid var(--lijn); }
+  th{ font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color:var(--zacht); }
   td.num{ font-variant-numeric:tabular-nums; }
   .melding{ margin-top:14px; padding:10px 13px; border-radius:7px; font-size:.9rem;
             border:1px solid var(--lijn); background:var(--grond); }
   .melding.goed{ color:var(--goed); border-color:currentColor; }
   .melding.fout{ color:var(--fout); border-color:currentColor; }
-  .leeg{ color:var(--zacht); font-size:.9rem; margin-top:14px; }
+  .leeg{ color:var(--zacht); font-size:.9rem; margin-top:12px; }
   .vink{ color:var(--goed); font-weight:700; }
   .tip{ font-size:.85rem; color:var(--zacht); margin-top:18px; }
-  code{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.88em; }
+  .rondekop{ display:flex; align-items:baseline; gap:10px; margin-top:18px; }
+  .rondekop h3{ font-size:.98rem; margin:0; }
+  .cfg{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.76rem; color:var(--zacht);
+        overflow-wrap:anywhere; }
+  details{ margin-top:14px; border-top:1px solid var(--lijn); padding-top:10px; }
+  summary{ cursor:pointer; font-size:.9rem; color:var(--zacht); }
+  .wacht{ text-align:center; padding:22px 10px; }
+  .wacht .groot{ font-size:1.6rem; margin-bottom:6px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Krak — sessietest</h1>
-  <p class="sub">Los van Taalkrak en Rekenkrak. Hiermee controleer je of je Supabase-project werkt vóór er iets aan de echte apps verandert.</p>
+  <p class="sub">Los van Taalkrak en Rekenkrak. Eén sessie, meerdere oefeningen: de juf start een ronde, de leerlingtoestellen schakelen vanzelf mee.</p>
 
   <div id="configFout" class="melding fout" style="display:none"></div>
 
@@ -69,15 +77,16 @@
         <div>Sessiecode</div>
         <div class="code" id="uitCode">····</div>
         <div id="uitStatus" class="leeg"></div>
-        <table id="tabel" style="display:none">
-          <thead><tr><th>Naam</th><th>Juist</th><th>Gemaakt</th><th>Klaar</th></tr></thead>
-          <tbody id="rijen"></tbody>
-        </table>
-        <p class="leeg" id="nogNiemand">Nog niemand aangesloten.</p>
+
+        <label for="inCfg">Instellingen voor de volgende oefening</label>
+        <input id="inCfg" class="mono" value="#g=1&amp;th=hak&amp;v=dictee&amp;n=10&amp;t=0&amp;m=s">
         <div class="knoppen">
-          <button id="btnStop">Beëindig sessie</button>
+          <button id="btnRonde">Start oefening</button>
+          <button id="btnStop" class="stil">Beëindig sessie</button>
           <button id="btnVergeet" class="stil">Vergeet op dit toestel</button>
         </div>
+
+        <div id="rondes"></div>
       </div>
     </div>
 
@@ -91,20 +100,31 @@
         <div class="knoppen"><button id="btnJoin">Doe mee</button></div>
       </div>
       <div id="lrlIn" style="display:none">
-        <p id="lrlWie"></p>
-        <p class="leeg">Stand: <span id="lrlStand" class="num">0 / 0</span></p>
-        <div class="knoppen">
-          <button id="btnJuist">Juist antwoord</button>
-          <button id="btnFout" class="stil">Fout antwoord</button>
-          <button id="btnKlaar" class="stil">Klaar</button>
+        <p id="lrlWie" class="leeg"></p>
+
+        <div id="lrlWacht" class="wacht" style="display:none">
+          <div class="groot">⏳</div>
+          <div id="lrlWachtTekst">Wacht even — de juf zet de oefening klaar.</div>
         </div>
+
+        <div id="lrlBezig" style="display:none">
+          <div class="rondekop"><h3 id="lrlRonde">Oefening 1</h3></div>
+          <div class="cfg" id="lrlCfg"></div>
+          <p class="leeg">Stand: <span id="lrlStand" class="num">0 / 0</span></p>
+          <div class="knoppen">
+            <button id="btnJuist">Juist antwoord</button>
+            <button id="btnFout" class="stil">Fout antwoord</button>
+            <button id="btnKlaar" class="stil">Klaar</button>
+          </div>
+        </div>
+
         <div class="knoppen"><button id="btnWeg" class="stil">Verlaat</button></div>
       </div>
       <div id="lrlMelding"></div>
     </div>
   </div>
 
-  <p class="tip">Echte test: open deze pagina op je laptop als leerkracht, en op je gsm (of in een privévenster) als leerling — dan zijn het twee losse browsers, net als in de klas. Duw als leerkracht gerust op F5: de sessie hoort gewoon door te lopen.</p>
+  <p class="tip">Echte test: deze pagina op je laptop als leerkracht, en op je gsm of in een privévenster als leerling. Start een oefening, laat de leerling wat antwoorden, en start dan een tweede oefening — het leerlingtoestel hoort binnen twee seconden vanzelf over te schakelen. Duw als leerkracht gerust op F5.</p>
 </div>
 
 <script src="krak-config.js"></script>
@@ -113,14 +133,22 @@
 (function(){
   "use strict";
   var $ = function(id){ return document.getElementById(id); };
-  var juist = 0, totaal = 0, stopVolgen = null;
+  var juist = 0, totaal = 0, mijnRonde = 0;
+  var stopVolgen = null, stopOpdracht = null;
 
   if(!KrakSessie.ingesteld()){
     var m = $("configFout");
     m.style.display = "block";
-    m.textContent = "krak-config.js is nog niet ingevuld. Zet je Project URL en anon public sleutel erin en laad deze pagina opnieuw.";
+    m.textContent = "krak-config.js is nog niet ingevuld. Zet je Project URL en publieke sleutel erin en laad deze pagina opnieuw.";
     Array.prototype.forEach.call(document.querySelectorAll("button"), function(b){ b.disabled = true; });
     return;
+  }
+
+  function el(tag, cls, txt){
+    var e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(txt != null) e.textContent = txt;
+    return e;
   }
 
   /* ---------- leerkracht ---------- */
@@ -137,26 +165,57 @@
     }
   }
 
-  function tekenStand(st){
-    $("uitStatus").textContent = st.actief
-      ? "Sessie loopt · " + st.leerlingen.length + " leerling" + (st.leerlingen.length===1?"":"en")
-      : "Sessie beëindigd · eindstand hieronder";
-    $("nogNiemand").style.display = st.leerlingen.length ? "none" : "block";
-    $("tabel").style.display      = st.leerlingen.length ? "table" : "none";
-    var tb = $("rijen");
-    tb.innerHTML = "";
-    st.leerlingen.forEach(function(l){
-      var tr = document.createElement("tr");
-      [l.voornaam, String(l.juist), String(l.totaal), l.klaar ? "✓" : "—"].forEach(function(t, i){
-        var td = document.createElement("td");
-        if(i) td.className = "num";
-        if(i===3 && l.klaar) td.className += " vink";
-        td.textContent = t;
-        tr.appendChild(td);
-      });
+  function standTabel(standen){
+    var t = el("table");
+    var thead = el("thead"), trh = el("tr");
+    ["Naam","Juist","Gemaakt","Klaar"].forEach(function(k){ trh.appendChild(el("th", null, k)); });
+    thead.appendChild(trh); t.appendChild(thead);
+    var tb = el("tbody");
+    standen.forEach(function(l){
+      var tr = el("tr");
+      tr.appendChild(el("td", null, l.voornaam));
+      tr.appendChild(el("td", "num", String(l.juist)));
+      tr.appendChild(el("td", "num", String(l.totaal)));
+      tr.appendChild(el("td", l.klaar ? "num vink" : "num", l.klaar ? "✓" : "—"));
       tb.appendChild(tr);
     });
-    $("btnStop").disabled = !st.actief;
+    t.appendChild(tb);
+    return t;
+  }
+
+  function tekenStand(ov){
+    var n = ov.leerlingen.length;
+    $("uitStatus").textContent =
+      (ov.actief ? "Sessie loopt" : "Sessie beëindigd") +
+      " · " + n + " leerling" + (n===1?"":"en") +
+      " · " + (ov.huidige_ronde ? "oefening " + ov.huidige_ronde : "nog geen oefening");
+    $("btnStop").disabled  = !ov.actief;
+    $("btnRonde").disabled = !ov.actief;
+    $("btnRonde").textContent = ov.huidige_ronde ? "Start volgende oefening" : "Start oefening";
+
+    var host = $("rondes");
+    host.innerHTML = "";
+    if(!ov.rondes.length){
+      host.appendChild(el("p", "leeg", "Nog geen oefening gestart."));
+      return;
+    }
+    ov.rondes.forEach(function(r, i){
+      if(i === 0){
+        var kop = el("div", "rondekop");
+        kop.appendChild(el("h3", null, "Oefening " + r.nummer + (ov.actief ? " — loopt nu" : "")));
+        host.appendChild(kop);
+        host.appendChild(el("div", "cfg", r.config));
+        host.appendChild(standTabel(r.standen));
+      } else {
+        var d = el("details");
+        var klaar = r.standen.filter(function(x){ return x.klaar; }).length;
+        d.appendChild(el("summary", null,
+          "Oefening " + r.nummer + " — " + klaar + " van de " + r.standen.length + " afgewerkt"));
+        d.appendChild(el("div", "cfg", r.config));
+        d.appendChild(standTabel(r.standen));
+        host.appendChild(d);
+      }
+    });
   }
 
   function tekenJufFout(f){
@@ -170,6 +229,13 @@
       .catch(function(f){ alert("Starten lukte niet: " + f.message); })
       .then(function(){ $("btnStart").disabled = false; });
   };
+  $("btnRonde").onclick = function(){
+    var cfg = ($("inCfg").value || "").trim();
+    this.disabled = true;
+    KrakSessie.rondeStart(cfg)
+      .catch(function(f){ alert("Oefening starten lukte niet: " + f.message); })
+      .then(function(){ $("btnRonde").disabled = false; });
+  };
   $("btnStop").onclick    = function(){ KrakSessie.beeindig(); };
   $("btnVergeet").onclick = function(){ KrakSessie.vergeetSessie(); toonJuf(); };
 
@@ -181,14 +247,43 @@
   }
 
   function toonLeerling(){
-    var code = ($("inCode").value || KrakSessie.codeUitHash() || "").toUpperCase();
+    var code = (($("inCode").value || "") || KrakSessie.codeUitHash() || "").toUpperCase();
     var d = code ? KrakSessie.deelname(code) : null;
     $("lrlUit").style.display = d ? "none"  : "block";
     $("lrlIn").style.display  = d ? "block" : "none";
-    if(d){
-      $("lrlWie").textContent = d.voornaam + " zit in sessie " + d.code + ".";
-      $("lrlStand").textContent = juist + " / " + totaal;
+    if(!d){
+      if(stopOpdracht){ stopOpdracht(); stopOpdracht = null; }
+      return;
     }
+    $("lrlWie").textContent = d.voornaam + " · sessie " + d.code;
+    if(!stopOpdracht) stopOpdracht = KrakSessie.volgOpdracht(nieuweOpdracht, 2000);
+  }
+
+  /* Wordt alleen aangeroepen als er écht iets verandert. */
+  function nieuweOpdracht(st){
+    if(!st.gevonden){ melding("Deze sessie bestaat niet meer.", "fout"); return; }
+    if(!st.actief){
+      $("lrlBezig").style.display = "none";
+      $("lrlWacht").style.display = "block";
+      $("lrlWachtTekst").textContent = "De juf heeft de sessie beëindigd.";
+      melding("De juf heeft de sessie beëindigd.", "fout");
+      return;
+    }
+    melding("");
+    if(!st.nummer){
+      $("lrlBezig").style.display = "none";
+      $("lrlWacht").style.display = "block";
+      $("lrlWachtTekst").textContent = "Wacht even — de juf zet de oefening klaar.";
+      return;
+    }
+    /* nieuwe ronde: teller op nul en beginnen */
+    mijnRonde = st.nummer;
+    juist = 0; totaal = 0;
+    $("lrlWacht").style.display = "none";
+    $("lrlBezig").style.display = "block";
+    $("lrlRonde").textContent = "Oefening " + st.nummer;
+    $("lrlCfg").textContent   = st.config || "";
+    $("lrlStand").textContent = "0 / 0";
   }
 
   $("btnJoin").onclick = function(){
@@ -196,11 +291,8 @@
     var naam = ($("inNaam").value||"").trim();
     melding("");
     KrakSessie.join(code, naam).then(function(){
-      juist = 0; totaal = 0;
-      /* code in de adresbalk zetten, zodat verversen niets kost —
-         in de echte app zit ze al in de link van de QR-code */
+      juist = 0; totaal = 0; mijnRonde = 0;
       try{ location.hash = "ls=" + code; }catch(e){}
-      melding("Aangesloten.", "goed");
       toonLeerling();
     }).catch(function(f){
       melding(f.message === "sessie_niet_gevonden" ? "Die sessiecode bestaat niet of is al beëindigd."
@@ -210,24 +302,26 @@
   };
 
   function antwoord(goed){
+    if(!mijnRonde) return;
     totaal++; if(goed) juist++;
     $("lrlStand").textContent = juist + " / " + totaal;
-    KrakSessie.meld(juist, totaal, false);
-    KrakSessie.loopt().then(function(loopt){
-      if(!loopt) melding("De leerkracht heeft de sessie beëindigd.", "fout");
-    });
+    KrakSessie.meld(mijnRonde, juist, totaal, false);
   }
   $("btnJuist").onclick = function(){ antwoord(true); };
   $("btnFout").onclick  = function(){ antwoord(false); };
   $("btnKlaar").onclick = function(){
-    KrakSessie.meld(juist, totaal, true).then(function(gelukt){
+    if(!mijnRonde) return;
+    KrakSessie.meld(mijnRonde, juist, totaal, true).then(function(gelukt){
       melding(gelukt === false ? "Kon niet doorsturen — loopt de sessie nog?" : "Eindstand doorgestuurd.",
               gelukt === false ? "fout" : "goed");
     });
   };
   $("btnWeg").onclick = function(){
     var code = ($("inCode").value||"").trim().toUpperCase();
-    KrakSessie.verlaat(code); juist = 0; totaal = 0; melding(""); toonLeerling();
+    if(stopOpdracht){ stopOpdracht(); stopOpdracht = null; }
+    KrakSessie.verlaat(code);
+    juist = 0; totaal = 0; mijnRonde = 0;
+    melding(""); toonLeerling();
   };
 
   /* ---------- start ---------- */

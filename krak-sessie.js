@@ -1,5 +1,5 @@
 /* ============================================================
-   Krak — sessielaag voor Taalkrak en Rekenkrak
+   Krak — sessielaag voor Taalkrak en Rekenkrak   (versie 2)
    ------------------------------------------------------------
    Praat met Supabase via gewone fetch-oproepen naar de RPC-functies.
    Geen SDK, geen CDN, geen build-stap: past bij de rest van de app en
@@ -8,6 +8,10 @@
    Laad dit NA krak-config.js:
        <script src="krak-config.js"></script>
        <script src="krak-sessie.js"></script>
+
+   Een sessie loopt een les lang en bevat RONDES. Elke ronde is één
+   oefening die de leerkracht start. Leerlingtoestellen vragen elke paar
+   seconden wat ze moeten doen en schakelen mee over.
 
    De sessiecode reist mee in de link als &ls=XXXX. Die sleutel is vrij in
    beide apps, en beide parseParams-functies negeren onbekende sleutels —
@@ -18,8 +22,8 @@ var KrakSessie = (function(){
 "use strict";
 
 var CFG = (typeof window!=="undefined" && window.KRAK_CONFIG) || null;
-var SLEUTEL_BEHEER = "krak.beheer";        /* leerkracht, localStorage      */
-var VOORVOEGSEL_DEELNAME = "krak.deelname."; /* leerling, per sessiecode    */
+var SLEUTEL_BEHEER = "krak.beheer";
+var VOORVOEGSEL_DEELNAME = "krak.deelname.";
 
 /* ---------- basis ---------- */
 
@@ -34,17 +38,12 @@ function ingesteld(){
    "Invalid path specified in request URL". */
 function basisUrl(){
   return String(CFG.url || "").trim()
-    .replace(/\/+$/, "")
-    .replace(/\/rest\/v1$/i, "")
-    .replace(/\/+$/, "");
+    .replace(/\/+$/, "").replace(/\/rest\/v1$/i, "").replace(/\/+$/, "");
 }
 
 function rpc(naam, params){
-  if(!ingesteld()){
-    return Promise.reject(new Error("krak-config.js is nog niet ingevuld"));
-  }
-  var basis = basisUrl();
-  return fetch(basis + "/rest/v1/rpc/" + naam, {
+  if(!ingesteld()) return Promise.reject(new Error("krak-config.js is nog niet ingevuld"));
+  return fetch(basisUrl() + "/rest/v1/rpc/" + naam, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -68,18 +67,9 @@ function rpc(naam, params){
 }
 
 /* Opslag mag altijd falen (privémodus, geblokkeerde cookies): nooit crashen. */
-function zet(sleutel, waarde){
-  try{ window.localStorage.setItem(sleutel, JSON.stringify(waarde)); }catch(e){}
-}
-function haal(sleutel){
-  try{
-    var s = window.localStorage.getItem(sleutel);
-    return s ? JSON.parse(s) : null;
-  }catch(e){ return null; }
-}
-function wis(sleutel){
-  try{ window.localStorage.removeItem(sleutel); }catch(e){}
-}
+function zet(s, w){ try{ window.localStorage.setItem(s, JSON.stringify(w)); }catch(e){} }
+function haal(s){ try{ var v=window.localStorage.getItem(s); return v?JSON.parse(v):null; }catch(e){ return null; } }
+function wis(s){ try{ window.localStorage.removeItem(s); }catch(e){} }
 
 /* ---------- sessiecode in de link ---------- */
 
@@ -125,40 +115,28 @@ function lopendeSessie(){
 
 function vergeetSessie(){ wis(SLEUTEL_BEHEER); }
 
+/* Volgende oefening starten. config is de instellingenhash van de app zelf,
+   bv. "#g=1&th=hak&v=dictee&n=10&t=0&m=s". Geeft het rondenummer terug. */
+function rondeStart(config){
+  var s = lopendeSessie();
+  if(!s) return Promise.reject(new Error("geen_sessie"));
+  return rpc("ronde_start", { p_beheer_token: s.beheer, p_config: config });
+}
+
 function overzicht(){
   var s = lopendeSessie();
   if(!s) return Promise.resolve(null);
-  return rpc("sessie_overzicht", { p_beheer_token: s.beheer }).then(function(rijen){
-    rijen = rijen || [];
-    var eerste = rijen[0] || {};
-    var leerlingen = rijen
-      .filter(function(r){ return r.voornaam != null; })
-      .map(function(r){
-        return {
-          voornaam: r.voornaam,
-          juist: r.juist || 0,
-          totaal: r.totaal || 0,
-          klaar: !!r.klaar,
-          bijgewerkt: r.bijgewerkt_op
-        };
-      });
-    return {
-      code: eerste.sessie_code || s.code,
-      actief: !!eerste.sessie_actief,
-      app: eerste.sessie_app || s.app,
-      leerlingen: leerlingen
-    };
-  }).catch(function(f){
-    /* De sessie is uit de database verdwenen (opgekuist): vergeet ze ook hier. */
-    if(f && f.message === "sessie_niet_gevonden"){ vergeetSessie(); return null; }
-    throw f;
-  });
+  return rpc("sessie_overzicht", { p_beheer_token: s.beheer })
+    .catch(function(f){
+      /* De sessie is uit de database verdwenen (opgekuist): vergeet ze ook hier. */
+      if(f && f.message === "sessie_niet_gevonden"){ vergeetSessie(); return null; }
+      throw f;
+    });
 }
 
 /* Blijft het overzicht ophalen tot je de teruggegeven functie aanroept. */
 function volg(bij, fout, ms){
-  var gestopt = false, timer = null;
-  var pauze = ms || 2000;
+  var gestopt = false, timer = null, pauze = ms || 2000;
   function ronde(){
     overzicht()
       .then(function(stand){ if(!gestopt && stand && bij) bij(stand); })
@@ -166,10 +144,7 @@ function volg(bij, fout, ms){
       .then(function(){ if(!gestopt) timer = setTimeout(ronde, pauze); });
   }
   ronde();
-  return function stop(){
-    gestopt = true;
-    if(timer) clearTimeout(timer);
-  };
+  return function stop(){ gestopt = true; if(timer) clearTimeout(timer); };
 }
 
 function beeindig(){
@@ -184,15 +159,16 @@ function beeindig(){
 
 /* Welke sessie deze leerling bezig is. Normaal staat de code in de link, maar
    ze kan ook ingetypt zijn — daarom onthouden we ze zodra ze bekend is, zodat
-   meld() en loopt() niet afhangen van wat er in de adresbalk staat. */
+   de rest niet afhangt van wat er in de adresbalk staat. */
 var actieveCode = null;
 
 function deelname(code){
   var c = code || actieveCode || codeUitHash();
   if(!c) return null;
-  var d = haal(VOORVOEGSEL_DEELNAME + String(c).toUpperCase());
+  c = String(c).toUpperCase();
+  var d = haal(VOORVOEGSEL_DEELNAME + c);
   if(!d || !d.token) return null;
-  actieveCode = String(c).toUpperCase();
+  actieveCode = c;
   return d;
 }
 
@@ -216,24 +192,57 @@ function verlaat(code){
   if(duwTimer){ clearTimeout(duwTimer); duwTimer = null; }
 }
 
-/* Voortgang doorsturen. Faalt nooit hoorbaar: een leerling zonder net moet
-   gewoon verder kunnen oefenen. Hoogstens één oproep per seconde, behalve de
-   eindstand — die gaat meteen. */
+/* Wat moet ik nu doen? Geeft {gevonden, actief, nummer, config}.
+   nummer 0 betekent: aangesloten, maar de juf zette nog geen oefening klaar. */
+function stand(){
+  var d = deelname();
+  if(!d) return Promise.resolve(null);
+  return rpc("leerling_stand", { p_token: d.token })
+    .catch(function(){ return null; });   /* netwerkhik: niets veranderen */
+}
+
+/* Roept bij() aan zodra er iets verandert: een nieuwe ronde, of de sessie die
+   stopt. Niet bij elke poging — alleen bij een echte wijziging. */
+function volgOpdracht(bij, ms){
+  var gestopt = false, timer = null, vorige = null, pauze = ms || 2000;
+  function ronde(){
+    stand().then(function(st){
+      if(gestopt || !st) return;
+      var sleutel = !st.gevonden ? "weg" : (!st.actief ? "stop" : "r" + st.nummer);
+      if(sleutel !== vorige){ vorige = sleutel; if(bij) bij(st); }
+    }).catch(function(){}).then(function(){
+      if(!gestopt) timer = setTimeout(ronde, pauze);
+    });
+  }
+  ronde();
+  return function stop(){ gestopt = true; if(timer) clearTimeout(timer); };
+}
+
+/* Voortgang doorsturen voor één ronde. Faalt nooit hoorbaar: een leerling
+   zonder net moet gewoon verder kunnen oefenen. Hoogstens één oproep per
+   seconde, behalve de eindstand en het wisselen van ronde — die gaan meteen. */
 var laatsteDuw = 0, wachtend = null, duwTimer = null;
 
-function meld(juist, totaal, klaar){
+function meld(ronde, juist, totaal, klaar){
   var d = deelname();
   if(!d) return Promise.resolve(false);
-  wachtend = { juist: juist|0, totaal: totaal|0, klaar: !!klaar, token: d.token };
-  if(wachtend.klaar){
+  var nieuw = { token: d.token, ronde: ronde|0, juist: juist|0, totaal: totaal|0, klaar: !!klaar };
+
+  /* Nog iets open staan van een andere ronde? Dat eerst wegschrijven,
+     anders gaat de stand van de vorige oefening verloren. */
+  if(wachtend && wachtend.ronde !== nieuw.ronde){
+    if(duwTimer){ clearTimeout(duwTimer); duwTimer = null; }
+    duw();
+  }
+  wachtend = nieuw;
+
+  if(nieuw.klaar){
     if(duwTimer){ clearTimeout(duwTimer); duwTimer = null; }
     return duw();
   }
   var sinds = Date.now() - laatsteDuw;
   if(sinds >= 1000) return duw();
-  if(!duwTimer){
-    duwTimer = setTimeout(function(){ duwTimer = null; duw(); }, 1000 - sinds);
-  }
+  if(!duwTimer) duwTimer = setTimeout(function(){ duwTimer = null; duw(); }, 1000 - sinds);
   return Promise.resolve(true);
 }
 
@@ -242,16 +251,9 @@ function duw(){
   if(!p) return Promise.resolve(false);
   laatsteDuw = Date.now();
   return rpc("voortgang_bijwerken", {
-    p_token: p.token, p_juist: p.juist, p_totaal: p.totaal, p_klaar: p.klaar
+    p_token: p.token, p_ronde: p.ronde,
+    p_juist: p.juist, p_totaal: p.totaal, p_klaar: p.klaar
   }).catch(function(){ return false; });
-}
-
-/* Loopt de sessie nog? Bij netwerkproblemen geven we true terug — we willen
-   een leerling niet uit een oefening gooien door één mislukte oproep. */
-function loopt(){
-  var d = deelname();
-  if(!d) return Promise.resolve(false);
-  return rpc("sessie_loopt", { p_token: d.token }).catch(function(){ return true; });
 }
 
 /* ============================================================ */
@@ -262,6 +264,7 @@ return {
   codeInLink: codeInLink,
 
   start: start,
+  rondeStart: rondeStart,
   lopendeSessie: lopendeSessie,
   vergeetSessie: vergeetSessie,
   overzicht: overzicht,
@@ -271,8 +274,9 @@ return {
   join: join,
   deelname: deelname,
   verlaat: verlaat,
-  meld: meld,
-  loopt: loopt
+  stand: stand,
+  volgOpdracht: volgOpdracht,
+  meld: meld
 };
 })();
 
