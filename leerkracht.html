@@ -7,6 +7,30 @@
 <link rel="stylesheet" href="taalkrak.css">
 <meta name="color-scheme" content="only light">
 <meta name="theme-color" content="#FFC233">
+<style>
+/* Live sessie */
+.sescode{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:34px; font-weight:800;
+          letter-spacing:.18em; text-align:center; padding:10px 6px; border-radius:14px;
+          background:rgba(47,168,198,.14); color:#14707F; margin:6px 0 10px; }
+.seslijst{ list-style:none; padding:0; margin:10px 0 0; }
+.seslijst li{ display:flex; align-items:center; gap:10px; justify-content:space-between;
+              padding:9px 0; border-bottom:1px solid rgba(0,0,0,.08); }
+.seslijst .wat b{ display:block; }
+.seslijst .wat span{ font-size:13px; opacity:.65; }
+.sestabel{ border-collapse:collapse; width:100%; margin-top:8px; font-size:15px; }
+.sestabel th,.sestabel td{ text-align:left; padding:7px 12px 7px 0;
+                           border-bottom:1px solid rgba(0,0,0,.08); vertical-align:top; }
+.sestabel th{ font-size:12px; text-transform:uppercase; letter-spacing:.07em; opacity:.6; }
+.sestabel .num{ font-variant-numeric:tabular-nums; }
+.sestabel .klaarja{ color:#2E7D32; font-weight:700; }
+.sestabel .fout{ color:#B23A2A; font-size:14px; }
+.sesronde{ margin-top:16px; }
+.sesronde h3{ margin:0 0 2px; font-size:17px; }
+.sescfg{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; opacity:.55;
+         overflow-wrap:anywhere; }
+.sesoud{ margin-top:12px; border-top:1px solid rgba(0,0,0,.08); padding-top:8px; }
+.sesoud summary{ cursor:pointer; font-size:15px; opacity:.75; }
+</style>
 </head>
 <body>
 
@@ -34,6 +58,29 @@
     </section>
 
     <aside class="out">
+      <div class="qrcard" id="sessieKaart">
+        <p class="block__label">Live sessie</p>
+
+        <div id="sesUit">
+          <p class="note">Start een sessie en stuur oefening na oefening naar de klas. Je ziet live wie waar zit, en je kan de resultaten dertig dagen lang opnieuw bekijken.</p>
+          <button class="btn btn--sun btn--block" id="sesStart" type="button">👩‍🏫 Start live sessie</button>
+          <div id="sesArchief"></div>
+        </div>
+
+        <div id="sesAan" class="hidden">
+          <div class="sescode" id="sesCode">····</div>
+          <p class="note" id="sesStatus"></p>
+          <button class="btn btn--grass btn--block" id="sesRonde" type="button">▶ Zet deze oefening klaar</button>
+          <button class="btn btn--ghost btn--block" id="sesStop" type="button">Sessie beëindigen</button>
+          <div class="linkrow" style="margin-top:10px">
+            <input id="sesLink" type="text" readonly aria-label="Link om deze sessie later te bekijken">
+            <button class="btn btn--sun" id="sesKopie" type="button">Kopieer</button>
+          </div>
+          <p class="note">Bewaar die link om deze sessie later op eender welk toestel terug te vinden.</p>
+          <button class="btn btn--ghost btn--block" id="sesTerug" type="button">← Mijn sessies</button>
+        </div>
+      </div>
+
       <div class="qrcard">
         <div class="qrwrap" id="qr" aria-label="QR-code"></div>
         <p class="qrcard__cap">Scan met een tablet of gsm</p>
@@ -48,6 +95,8 @@
       </div>
     </aside>
   </div>
+
+  <section class="panel hidden" id="sesOverzicht" style="margin-top:18px"></section>
 </main>
 
 <!-- ===================== SPELER ===================== -->
@@ -73,6 +122,8 @@
 <canvas id="confetti"></canvas>
 
 <script src="qrcode.js"></script>
+<script src="krak-config.js"></script>
+<script src="krak-sessie.js"></script>
 <script src="engine.js"></script>
 <script>
 (function(){
@@ -85,7 +136,10 @@ var state = TK.defaults();
 function fullURL(){
   var dir = location.href.split("#")[0].replace(/[^\/]*$/, "");
   var hosted = (location.origin && location.origin!=="null");
-  return dir + (hosted? "" : "index.html") + TK.buildHash(state);
+  var u = dir + (hosted? "" : "index.html") + TK.buildHash(state);
+  var ses = K && K.lopendeSessie();
+  if(ses) u = K.codeInLink(u, ses.code);   /* loopt er een sessie, dan is dit de deelnamelink */
+  return u;
 }
 function drawQR(url){
   var host=$("#qr"); host.innerHTML="";
@@ -146,9 +200,174 @@ $("#hostnote").innerHTML = host
   ? '<b>Zo werkt het:</b> de QR-code en link openen de <b>leerlingapp</b> met precies deze oefening erin. Deel ze met je leerlingen — geen login nodig. De instellingen zitten in de link zelf.'
   : '<b>Tip:</b> zet <b>index.html</b> en <b>leerkracht.html</b> samen online (bv. GitHub Pages). De QR-codes wijzen dan automatisch naar de leerlingapp. Met "Probeer zelf" test je de oefening nu al volledig.';
 
+/* ============================================================
+   Live sessie
+   ============================================================ */
+var K = (typeof KrakSessie!=="undefined" && KrakSessie.ingesteld()) ? KrakSessie : null;
+var stopVolgen = null;
+
+function el(tag, cls, txt){
+  var e=document.createElement(tag);
+  if(cls) e.className=cls;
+  if(txt!=null) e.textContent=txt;
+  return e;
+}
+function datumKort(iso){
+  if(!iso) return "";
+  var d=new Date(iso);
+  if(isNaN(d)) return "";
+  return d.toLocaleDateString("nl-BE",{day:"numeric",month:"short"})+" "+
+         d.toLocaleTimeString("nl-BE",{hour:"2-digit",minute:"2-digit"});
+}
+
+function toonSessie(){
+  if(!K){
+    $("#sesUit").innerHTML='<p class="note">Live sessies staan niet aan: <b>krak-config.js</b> is nog niet ingevuld.</p>';
+    return;
+  }
+  var ses=K.lopendeSessie();
+  $("#sesUit").classList.toggle("hidden", !!ses);
+  $("#sesAan").classList.toggle("hidden", !ses);
+  $("#sesOverzicht").classList.toggle("hidden", !ses);
+  if(!ses){
+    if(stopVolgen){ stopVolgen(); stopVolgen=null; }
+    tekenArchief();
+    sync();
+    return;
+  }
+  $("#sesCode").textContent=ses.code;
+  $("#sesLink").value=K.beheerLink(location.href, ses.beheer)||"";
+  if(!stopVolgen){
+    $("#sesStatus").textContent="Verbinden…";
+    stopVolgen=K.volg(tekenStand, function(f){
+      $("#sesStatus").textContent="Even geen verbinding — ik blijf proberen.";
+    }, 2000);
+  }
+  sync();
+}
+
+function tekenArchief(){
+  var host=$("#sesArchief"); host.innerHTML="";
+  if(!K) return;
+  var lijst=K.mijnSessies();
+  if(!lijst.length) return;
+  host.appendChild(el("p","note","Mijn sessies — dertig dagen te bekijken"));
+  var ul=el("ul","seslijst");
+  lijst.forEach(function(x){
+    var li=el("li");
+    var wat=el("div","wat");
+    var b=el("b",null,x.code); wat.appendChild(b);
+    wat.appendChild(el("span",null,datumKort(x.datum)));
+    li.appendChild(wat);
+    var knop=el("button","btn btn--ghost","Bekijk"); knop.type="button";
+    knop.onclick=function(){ K.kiesSessie(x.beheer); toonSessie(); };
+    li.appendChild(knop);
+    ul.appendChild(li);
+  });
+  host.appendChild(ul);
+}
+
+function foutenTekst(f){
+  if(!f||!f.length) return "";
+  return f.map(function(x){ return x.a? (x.v+" → "+x.a) : x.v; }).join(", ");
+}
+function standTabel(standen){
+  var t=el("table","sestabel");
+  var tr=el("tr");
+  ["Leerling","Juist","Gemaakt","Klaar","Fout gegaan"].forEach(function(k){ tr.appendChild(el("th",null,k)); });
+  var th=el("thead"); th.appendChild(tr); t.appendChild(th);
+  var tb=el("tbody");
+  standen.forEach(function(l){
+    var r=el("tr");
+    r.appendChild(el("td",null,l.voornaam));
+    r.appendChild(el("td","num",String(l.juist)));
+    r.appendChild(el("td","num",String(l.totaal)));
+    r.appendChild(el("td",l.klaar?"num klaarja":"num", l.klaar?"✓":"—"));
+    r.appendChild(el("td","fout",foutenTekst(l.fouten)));
+    tb.appendChild(r);
+  });
+  t.appendChild(tb);
+  return t;
+}
+
+function tekenStand(ov){
+  var n=ov.leerlingen.length;
+  $("#sesStatus").textContent =
+    (ov.actief? "Loopt":"Beëindigd")+" · "+n+" leerling"+(n===1?"":"en")+
+    " · "+(ov.huidige_ronde? "oefening "+ov.huidige_ronde : "nog geen oefening")+
+    (ov.aangemaakt_op? " · "+datumKort(ov.aangemaakt_op):"");
+  $("#sesRonde").disabled=!ov.actief;
+  $("#sesStop").disabled=!ov.actief;
+  $("#sesRonde").textContent = ov.huidige_ronde? "▶ Zet volgende oefening klaar" : "▶ Zet deze oefening klaar";
+
+  var host=$("#sesOverzicht"); host.innerHTML="";
+  host.appendChild(el("p","block__label","Sessie "+ov.code+(ov.actief?"":" — beëindigd")));
+  if(!ov.leerlingen.length){
+    host.appendChild(el("p","note","Nog niemand aangesloten. Laat de leerlingen de QR-code scannen of de link openen."));
+  }
+  if(!ov.rondes.length){
+    host.appendChild(el("p","note","Nog geen oefening klaargezet. Stel links een oefening in en klik op “Zet deze oefening klaar”."));
+    return;
+  }
+  ov.rondes.forEach(function(r,i){
+    if(i===0){
+      var blok=el("div","sesronde");
+      blok.appendChild(el("h3",null,"Oefening "+r.nummer+(ov.actief?" — loopt nu":"")));
+      blok.appendChild(el("div","sescfg",r.config));
+      blok.appendChild(standTabel(r.standen));
+      host.appendChild(blok);
+    } else {
+      var d=el("details","sesoud");
+      var klaar=r.standen.filter(function(x){return x.klaar;}).length;
+      d.appendChild(el("summary",null,"Oefening "+r.nummer+" — "+klaar+" van de "+r.standen.length+" afgewerkt"));
+      d.appendChild(el("div","sescfg",r.config));
+      d.appendChild(standTabel(r.standen));
+      host.appendChild(d);
+    }
+  });
+}
+
+if(K){
+  $("#sesStart").onclick=function(){
+    var knop=this; knop.disabled=true;
+    K.start("taalkrak", TK.GRAAD_LABEL[state.graad])
+      .then(toonSessie)
+      .catch(function(f){ alert("Een sessie starten lukte niet: "+f.message); })
+      .then(function(){ knop.disabled=false; });
+  };
+  $("#sesRonde").onclick=function(){
+    var knop=this; knop.disabled=true;
+    K.rondeStart(TK.buildHash(state))
+      .catch(function(f){ alert("De oefening klaarzetten lukte niet: "+f.message); })
+      .then(function(){ knop.disabled=false; });
+  };
+  $("#sesStop").onclick=function(){
+    if(!confirm("De sessie beëindigen? De leerlingen kunnen dan niets meer doorsturen. Je kan de resultaten nadien nog bekijken.")) return;
+    K.beeindig();
+  };
+  $("#sesTerug").onclick=function(){
+    if(stopVolgen){ stopVolgen(); stopVolgen=null; }
+    K.sluitSessie();
+    try{ if(location.hash.indexOf("beheer=")>-1) history.replaceState(null,"",location.pathname); }catch(e){}
+    toonSessie();
+  };
+  $("#sesKopie").onclick=function(){
+    var inp=$("#sesLink"); inp.select(); inp.setSelectionRange(0,99999);
+    var done=function(){ var b=$("#sesKopie"); b.textContent="Gekopieerd ✓"; setTimeout(function(){b.textContent="Kopieer";},1800); };
+    if(navigator.clipboard) navigator.clipboard.writeText(inp.value).then(done,function(){try{document.execCommand("copy");done();}catch(e){}});
+    else { try{document.execCommand("copy");done();}catch(e){} }
+  };
+}
+
 var fromHash = TK.parseParams(location.hash);
 if(fromHash){ for(var k in fromHash) state[k]=fromHash[k]; settings.sync(); }
 sync();
+
+if(K){
+  K.herstelUitLink().catch(function(){ return null; }).then(toonSessie);
+} else {
+  toonSessie();
+}
 })();
 </script>
 </body>

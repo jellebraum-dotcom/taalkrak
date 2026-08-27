@@ -523,7 +523,9 @@ function startGame(cfg){
 
 function endGame(){
   clearTimer();
+  meldSessie(true);
   if(window.speechSynthesis) speechSynthesis.cancel();
+  if(curAudio){ try{ curAudio.pause(); }catch(e){} curAudio=null; }
   $("#screenPlay").classList.add("hidden");
   var box=$("#resultsBox"); box.innerHTML="";
   var pct = game.total? Math.round(100*game.good/game.total) : 0;
@@ -573,11 +575,14 @@ function endGame(){
   }
 
   var btns=h("div","results__btns");
-  var again=h("button","btn btn--grass","🔁 Nog eens!"); again.type="button";
-  again.onclick=function(){ $("#screenDone").classList.add("hidden"); startGame(game.cfg); };
   var stop=h("button","btn btn--ghost","Klaar"); stop.type="button";
   stop.onclick=function(){ $("#screenDone").classList.add("hidden"); onExit(); };
-  btns.appendChild(again); btns.appendChild(stop);
+  if(!inSessie()){
+    var again=h("button","btn btn--grass","🔁 Nog eens!"); again.type="button";
+    again.onclick=function(){ $("#screenDone").classList.add("hidden"); startGame(game.cfg); };
+    btns.appendChild(again);
+  }
+  btns.appendChild(stop);
   box.appendChild(btns);
   $("#screenDone").classList.remove("hidden");
   sDone(); confettiBurst();
@@ -794,6 +799,23 @@ function classReveal(ex){
   }
 }
 
+/* ---------- live sessie (optioneel) ----------
+   Draait alleen als krak-sessie.js geladen is én het kind via een sessielink
+   binnenkwam. Zonder sessie, zonder netwerk of zonder die bestanden gebeurt
+   er simpelweg niets — de oefening zelf mag hier nooit op stuklopen. */
+var sessieRonde = 0;
+function setSessieRonde(n){ sessieRonde = n|0; }
+function inSessie(){ return sessieRonde > 0; }
+function meldSessie(klaar){
+  if(!sessieRonde || typeof KrakSessie==="undefined" || !game) return;
+  try{
+    var fouten = game.log.filter(function(e){ return !e.ok; }).map(function(e){
+      return { v: reviewLabel(e.ex), a: e.timeout? "" : (e.given || "") };
+    });
+    KrakSessie.meld(sessieRonde, game.good, game.total, !!klaar, fouten);
+  }catch(e){}
+}
+
 /* ---------- antwoord & feedback ---------- */
 var GOOD=[["🎉","Goed zo!"],["⭐","Super!"],["👏","Knap!"],["💪","Sterk!"],["🌟","Prima!"],["🚀","Geweldig!"]];
 function submit(ok, ex, inputEl, choiceBtn){
@@ -818,6 +840,7 @@ function submit(ok, ex, inputEl, choiceBtn){
     speak(full);
     setTimeout(nextExercise, 2500);
   }
+  meldSessie(false);
 }
 function miss(msg){
   if(!game || game.locked) return; game.locked=true;
@@ -826,6 +849,7 @@ function miss(msg){
   var full = game.cur? (game.cur.word||game.cur.answer):"";
   sBad(); splash(["⏰",msg||"De tijd is om!"], "Juist is: "+full);
   setTimeout(nextExercise, 2500);
+  meldSessie(false);
 }
 
 var splashTimer=null;
@@ -880,7 +904,8 @@ return {
   buildDeck:buildDeck, drawEntry:drawEntry, exerciseFromEntry:exerciseFromEntry, entryKey:entryKey,
   startGame:startGame, setOnExit:setOnExit,
   toggleSound:toggleSound, resumeAudio:resumeAudio,
-  speak:speak, ttsAvailable:ttsAvailable
+  speak:speak, ttsAvailable:ttsAvailable,
+  setSessieRonde:setSessieRonde, inSessie:inSessie, meldSessie:meldSessie
 };
 })();
 if(typeof module!=="undefined" && module.exports) module.exports=TK;

@@ -213,7 +213,11 @@ function volg(bij, fout, ms){
   var gestopt = false, timer = null, pauze = ms || 2000;
   function ronde(){
     overzicht()
-      .then(function(stand){ if(!gestopt && stand && bij) bij(stand); })
+      .then(function(stand){
+        if(gestopt || !stand || !bij) return;
+        try{ bij(stand); }
+        catch(e){ setTimeout(function(){ throw e; }, 0); }
+      })
       .catch(function(f){ if(!gestopt && fout) fout(f); })
       .then(function(){ if(!gestopt) timer = setTimeout(ronde, pauze); });
   }
@@ -283,7 +287,16 @@ function volgOpdracht(bij, ms){
     stand().then(function(st){
       if(gestopt || !st) return;
       var sleutel = !st.gevonden ? "weg" : (!st.actief ? "stop" : "r" + st.nummer);
-      if(sleutel !== vorige){ vorige = sleutel; if(bij) bij(st); }
+      if(sleutel !== vorige){
+        try{
+          if(bij) bij(st);
+          vorige = sleutel;          /* pas onthouden als de callback het overleefde */
+        }catch(e){
+          /* Niet stilhouden: zo'n fout hoort zichtbaar te zijn, en we blijven
+             het proberen in plaats van voorgoed in de wachtkamer te blijven. */
+          setTimeout(function(){ throw e; }, 0);
+        }
+      }
     }).catch(function(){}).then(function(){
       if(!gestopt) timer = setTimeout(ronde, pauze);
     });
@@ -319,6 +332,14 @@ function meld(ronde, juist, totaal, klaar, fouten){
   if(sinds >= 1000) return duw();
   if(!duwTimer) duwTimer = setTimeout(function(){ duwTimer = null; duw(); }, 1000 - sinds);
   return Promise.resolve(true);
+}
+
+/* Meteen wegschrijven wat er nog in de wachtrij staat. Handig vlak voor je
+   van ronde wisselt: anders kan de laatste stand van de vorige oefening
+   blijven hangen. */
+function spoel(){
+  if(duwTimer){ clearTimeout(duwTimer); duwTimer = null; }
+  return duw();
 }
 
 function duw(){
@@ -357,7 +378,8 @@ return {
   verlaat: verlaat,
   stand: stand,
   volgOpdracht: volgOpdracht,
-  meld: meld
+  meld: meld,
+  spoel: spoel
 };
 })();
 

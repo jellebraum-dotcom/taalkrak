@@ -1,8 +1,9 @@
 /* Taalkrak service worker — app-shell cache voor offline gebruik */
-var CACHE = "taalkrak-v7";
+var CACHE = "taalkrak-v8";
 var ASSETS = [
   "./", "index.html", "leerkracht.html", "taalkrak.css",
   "engine.js", "jsqr.js", "qrcode.js", "manifest.webmanifest",
+  "krak-config.js", "krak-sessie.js",
   "icon-192.png", "icon-512.png", "icon-512-maskable.png", "apple-touch-icon.png"
 ];
 self.addEventListener("install", function(e){
