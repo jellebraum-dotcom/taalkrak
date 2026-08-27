@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Krak — sessietest</title>
+<style>
+  :root{
+    --grond:#f4f6f2; --vlak:#fff; --inkt:#1d2321; --zacht:#5a6560;
+    --lijn:#dce3dc; --accent:#10697e; --accent-vlak:#e2eff2;
+    --goed:#37703a; --fout:#a33b2a;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --grond:#131816; --vlak:#1b2220; --inkt:#e7ede9; --zacht:#9aa8a2;
+           --lijn:#2c3733; --accent:#5cbcd2; --accent-vlak:#14313a;
+           --goed:#7fc17d; --fout:#e08a76; }
+  }
+  *{box-sizing:border-box}
+  body{ margin:0; padding:24px 18px 64px; background:var(--grond); color:var(--inkt);
+        font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .wrap{ max-width:960px; margin:0 auto; }
+  h1{ font-size:1.5rem; margin:0 0 4px; }
+  .sub{ color:var(--zacht); margin:0 0 22px; font-size:.94rem; }
+  .rooster{ display:grid; grid-template-columns:1fr; gap:18px; }
+  @media (min-width:820px){ .rooster{ grid-template-columns:1fr 1fr; } }
+  .kaart{ background:var(--vlak); border:1px solid var(--lijn); border-radius:10px; padding:18px 20px; }
+  .kaart h2{ font-size:1.05rem; margin:0 0 14px; }
+  label{ display:block; font-size:.82rem; color:var(--zacht); margin:12px 0 4px; }
+  input{ width:100%; padding:9px 11px; font:inherit; color:inherit;
+         background:var(--grond); border:1px solid var(--lijn); border-radius:7px; }
+  button{ font:inherit; font-weight:600; padding:9px 15px; border-radius:7px; cursor:pointer;
+          border:1px solid var(--accent); background:var(--accent); color:#fff; }
+  button.stil{ background:transparent; color:var(--accent); }
+  button:disabled{ opacity:.42; cursor:not-allowed; }
+  .knoppen{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .code{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:2rem; font-weight:700;
+         letter-spacing:.16em; color:var(--accent); background:var(--accent-vlak);
+         padding:10px 16px; border-radius:8px; display:inline-block; margin:6px 0; }
+  table{ border-collapse:collapse; width:100%; margin-top:14px; font-size:.94rem; }
+  th,td{ text-align:left; padding:7px 10px 7px 0; border-bottom:1px solid var(--lijn); }
+  th{ font-size:.74rem; text-transform:uppercase; letter-spacing:.08em; color:var(--zacht); }
+  td.num{ font-variant-numeric:tabular-nums; }
+  .melding{ margin-top:14px; padding:10px 13px; border-radius:7px; font-size:.9rem;
+            border:1px solid var(--lijn); background:var(--grond); }
+  .melding.goed{ color:var(--goed); border-color:currentColor; }
+  .melding.fout{ color:var(--fout); border-color:currentColor; }
+  .leeg{ color:var(--zacht); font-size:.9rem; margin-top:14px; }
+  .vink{ color:var(--goed); font-weight:700; }
+  .tip{ font-size:.85rem; color:var(--zacht); margin-top:18px; }
+  code{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.88em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Krak — sessietest</h1>
+  <p class="sub">Los van Taalkrak en Rekenkrak. Hiermee controleer je of je Supabase-project werkt vóór er iets aan de echte apps verandert.</p>
+
+  <div id="configFout" class="melding fout" style="display:none"></div>
+
+  <div class="rooster">
+    <div class="kaart">
+      <h2>Leerkracht</h2>
+      <div id="jufLeeg">
+        <p class="leeg">Nog geen sessie op dit toestel.</p>
+        <div class="knoppen"><button id="btnStart">Start testsessie</button></div>
+      </div>
+      <div id="jufActief" style="display:none">
+        <div>Sessiecode</div>
+        <div class="code" id="uitCode">····</div>
+        <div id="uitStatus" class="leeg"></div>
+        <table id="tabel" style="display:none">
+          <thead><tr><th>Naam</th><th>Juist</th><th>Gemaakt</th><th>Klaar</th></tr></thead>
+          <tbody id="rijen"></tbody>
+        </table>
+        <p class="leeg" id="nogNiemand">Nog niemand aangesloten.</p>
+        <div class="knoppen">
+          <button id="btnStop">Beëindig sessie</button>
+          <button id="btnVergeet" class="stil">Vergeet op dit toestel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="kaart">
+      <h2>Leerling</h2>
+      <div id="lrlUit">
+        <label for="inCode">Sessiecode</label>
+        <input id="inCode" maxlength="4" autocapitalize="characters" placeholder="ABCD">
+        <label for="inNaam">Voornaam</label>
+        <input id="inNaam" maxlength="30" placeholder="Lars">
+        <div class="knoppen"><button id="btnJoin">Doe mee</button></div>
+      </div>
+      <div id="lrlIn" style="display:none">
+        <p id="lrlWie"></p>
+        <p class="leeg">Stand: <span id="lrlStand" class="num">0 / 0</span></p>
+        <div class="knoppen">
+          <button id="btnJuist">Juist antwoord</button>
+          <button id="btnFout" class="stil">Fout antwoord</button>
+          <button id="btnKlaar" class="stil">Klaar</button>
+        </div>
+        <div class="knoppen"><button id="btnWeg" class="stil">Verlaat</button></div>
+      </div>
+      <div id="lrlMelding"></div>
+    </div>
+  </div>
+
+  <p class="tip">Echte test: open deze pagina op je laptop als leerkracht, en op je gsm (of in een privévenster) als leerling — dan zijn het twee losse browsers, net als in de klas. Duw als leerkracht gerust op F5: de sessie hoort gewoon door te lopen.</p>
+</div>
+
+<script src="krak-config.js"></script>
+<script src="krak-sessie.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  var juist = 0, totaal = 0, stopVolgen = null;
+
+  if(!KrakSessie.ingesteld()){
+    var m = $("configFout");
+    m.style.display = "block";
+    m.textContent = "krak-config.js is nog niet ingevuld. Zet je Project URL en anon public sleutel erin en laad deze pagina opnieuw.";
+    Array.prototype.forEach.call(document.querySelectorAll("button"), function(b){ b.disabled = true; });
+    return;
+  }
+
+  /* ---------- leerkracht ---------- */
+
+  function toonJuf(){
+    var s = KrakSessie.lopendeSessie();
+    $("jufLeeg").style.display   = s ? "none"  : "block";
+    $("jufActief").style.display = s ? "block" : "none";
+    if(!s){ if(stopVolgen){ stopVolgen(); stopVolgen = null; } return; }
+    $("uitCode").textContent = s.code;
+    if(!stopVolgen){
+      $("uitStatus").textContent = "Verbinden…";
+      stopVolgen = KrakSessie.volg(tekenStand, tekenJufFout, 2000);
+    }
+  }
+
+  function tekenStand(st){
+    $("uitStatus").textContent = st.actief
+      ? "Sessie loopt · " + st.leerlingen.length + " leerling" + (st.leerlingen.length===1?"":"en")
+      : "Sessie beëindigd · eindstand hieronder";
+    $("nogNiemand").style.display = st.leerlingen.length ? "none" : "block";
+    $("tabel").style.display      = st.leerlingen.length ? "table" : "none";
+    var tb = $("rijen");
+    tb.innerHTML = "";
+    st.leerlingen.forEach(function(l){
+      var tr = document.createElement("tr");
+      [l.voornaam, String(l.juist), String(l.totaal), l.klaar ? "✓" : "—"].forEach(function(t, i){
+        var td = document.createElement("td");
+        if(i) td.className = "num";
+        if(i===3 && l.klaar) td.className += " vink";
+        td.textContent = t;
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+    $("btnStop").disabled = !st.actief;
+  }
+
+  function tekenJufFout(f){
+    $("uitStatus").textContent = "Even geen verbinding (" + f.message + ") — blijft opnieuw proberen.";
+  }
+
+  $("btnStart").onclick = function(){
+    this.disabled = true;
+    KrakSessie.start("taalkrak", "Sessietest")
+      .then(toonJuf)
+      .catch(function(f){ alert("Starten lukte niet: " + f.message); })
+      .then(function(){ $("btnStart").disabled = false; });
+  };
+  $("btnStop").onclick    = function(){ KrakSessie.beeindig(); };
+  $("btnVergeet").onclick = function(){ KrakSessie.vergeetSessie(); toonJuf(); };
+
+  /* ---------- leerling ---------- */
+
+  function melding(tekst, soort){
+    $("lrlMelding").innerHTML = tekst
+      ? '<div class="melding ' + (soort||"") + '">' + tekst + "</div>" : "";
+  }
+
+  function toonLeerling(){
+    var code = ($("inCode").value || KrakSessie.codeUitHash() || "").toUpperCase();
+    var d = code ? KrakSessie.deelname(code) : null;
+    $("lrlUit").style.display = d ? "none"  : "block";
+    $("lrlIn").style.display  = d ? "block" : "none";
+    if(d){
+      $("lrlWie").textContent = d.voornaam + " zit in sessie " + d.code + ".";
+      $("lrlStand").textContent = juist + " / " + totaal;
+    }
+  }
+
+  $("btnJoin").onclick = function(){
+    var code = ($("inCode").value||"").trim().toUpperCase();
+    var naam = ($("inNaam").value||"").trim();
+    melding("");
+    KrakSessie.join(code, naam).then(function(){
+      juist = 0; totaal = 0;
+      /* code in de adresbalk zetten, zodat verversen niets kost —
+         in de echte app zit ze al in de link van de QR-code */
+      try{ location.hash = "ls=" + code; }catch(e){}
+      melding("Aangesloten.", "goed");
+      toonLeerling();
+    }).catch(function(f){
+      melding(f.message === "sessie_niet_gevonden" ? "Die sessiecode bestaat niet of is al beëindigd."
+            : f.message === "ongeldige_voornaam"   ? "Vul een voornaam in."
+            : "Aansluiten lukte niet: " + f.message, "fout");
+    });
+  };
+
+  function antwoord(goed){
+    totaal++; if(goed) juist++;
+    $("lrlStand").textContent = juist + " / " + totaal;
+    KrakSessie.meld(juist, totaal, false);
+    KrakSessie.loopt().then(function(loopt){
+      if(!loopt) melding("De leerkracht heeft de sessie beëindigd.", "fout");
+    });
+  }
+  $("btnJuist").onclick = function(){ antwoord(true); };
+  $("btnFout").onclick  = function(){ antwoord(false); };
+  $("btnKlaar").onclick = function(){
+    KrakSessie.meld(juist, totaal, true).then(function(gelukt){
+      melding(gelukt === false ? "Kon niet doorsturen — loopt de sessie nog?" : "Eindstand doorgestuurd.",
+              gelukt === false ? "fout" : "goed");
+    });
+  };
+  $("btnWeg").onclick = function(){
+    var code = ($("inCode").value||"").trim().toUpperCase();
+    KrakSessie.verlaat(code); juist = 0; totaal = 0; melding(""); toonLeerling();
+  };
+
+  /* ---------- start ---------- */
+
+  var uitLink = KrakSessie.codeUitHash();
+  if(uitLink) $("inCode").value = uitLink;
+  toonJuf();
+  toonLeerling();
+})();
+</script>
+</body>
+</html>
