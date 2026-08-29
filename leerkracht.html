@@ -33,6 +33,10 @@
 .btn:disabled{ opacity:.4; cursor:not-allowed; filter:grayscale(.5); }
 .sesklaar{ text-align:center; font-weight:700; padding:10px 12px; border-radius:12px;
            background:rgba(0,0,0,.06); margin:6px 0 10px; }
+.seswie{ display:flex; align-items:center; justify-content:space-between; gap:10px;
+         font-size:13px; opacity:.75; margin-top:12px; padding-top:10px;
+         border-top:1px solid rgba(0,0,0,.08); }
+.seswie button{ font-size:13px; padding:4px 10px; }
 </style>
 </head>
 <body>
@@ -64,7 +68,12 @@
       <div class="qrcard" id="sessieKaart">
         <p class="block__label">Live sessie</p>
 
-        <div id="sesUit">
+        <div id="sesAnoniem">
+          <p class="note">Meld je aan om live sessies te maken. Zo ziet alleen jij jouw sessies en resultaten. Je leerlingen hebben géén account nodig — die doen mee met de code.</p>
+          <button class="btn btn--sun btn--block" id="sesLogin" type="button">Aanmelden met Google</button>
+        </div>
+
+        <div id="sesUit" class="hidden">
           <p class="note">Start een sessie en stuur oefening na oefening naar de klas. Je ziet live wie waar zit, en je kan de resultaten dertig dagen lang opnieuw bekijken.</p>
           <button class="btn btn--sun btn--block" id="sesStart" type="button">👩‍🏫 Start live sessie</button>
           <div id="sesArchief"></div>
@@ -82,6 +91,11 @@
           </div>
           <p class="note">Bewaar die link om deze sessie later op eender welk toestel terug te vinden.</p>
           <button class="btn btn--ghost btn--block" id="sesTerug" type="button">← Mijn sessies</button>
+        </div>
+
+        <div class="seswie hidden" id="sesWie">
+          <span id="sesWieNaam"></span>
+          <button class="btn btn--ghost" id="sesLogout" type="button">Afmelden</button>
         </div>
       </div>
 
@@ -134,6 +148,10 @@
 "use strict";
 var $=function(s){return document.querySelector(s);};
 var $$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s));};
+/* Terug van Google? Dan staan de tokens in de hash — die eerst opruimen,
+   vóór iets anders de hash probeert te lezen. */
+if(typeof KrakSessie!=="undefined" && KrakSessie.ingesteld()) KrakSessie.verwerkAanmelding();
+
 var state = TK.defaults();
 
 /* QR + link wijzen naar de leerlingapp in dezelfde map. */
@@ -226,16 +244,28 @@ function datumKort(iso){
 
 function toonSessie(){
   if(!K){
-    $("#sesUit").innerHTML='<p class="note">Live sessies staan niet aan: <b>krak-config.js</b> is nog niet ingevuld.</p>';
+    $("#sesAnoniem").innerHTML='<p class="note">Live sessies staan niet aan: <b>krak-config.js</b> is nog niet ingevuld.</p>';
     return;
   }
-  var ses=K.lopendeSessie();
-  $("#sesUit").classList.toggle("hidden", !!ses);
+  var aan = K.aangemeld();
+  var ses = aan ? K.lopendeSessie() : null;
+
+  $("#sesAnoniem").classList.toggle("hidden", aan);
+  $("#sesWie").classList.toggle("hidden", !aan);
+  $("#sesUit").classList.toggle("hidden", !aan || !!ses);
   $("#sesAan").classList.toggle("hidden", !ses);
   $("#sesOverzicht").classList.toggle("hidden", !ses);
+
+  if(aan){
+    var g = K.gebruiker();
+    $("#sesWieNaam").textContent = g && g.email ? "Aangemeld als "+g.email : "Aangemeld";
+    if(!g) K.haalGebruiker().then(function(u){
+      if(u && u.email) $("#sesWieNaam").textContent = "Aangemeld als "+u.email;
+    });
+  }
   if(!ses){
     if(stopVolgen){ stopVolgen(); stopVolgen=null; }
-    tekenArchief();
+    if(aan) tekenArchief();
     sync();
     return;
   }
@@ -251,24 +281,37 @@ function toonSessie(){
 }
 
 function tekenArchief(){
-  var host=$("#sesArchief"); host.innerHTML="";
+  var host=$("#sesArchief");
   if(!K) return;
-  var lijst=K.mijnSessies();
-  if(!lijst.length) return;
-  host.appendChild(el("p","note","Mijn sessies — dertig dagen te bekijken"));
-  var ul=el("ul","seslijst");
-  lijst.forEach(function(x){
-    var li=el("li");
-    var wat=el("div","wat");
-    var b=el("b",null,x.code); wat.appendChild(b);
-    wat.appendChild(el("span",null,datumKort(x.datum)));
-    li.appendChild(wat);
-    var knop=el("button","btn btn--ghost","Bekijk"); knop.type="button";
-    knop.onclick=function(){ K.kiesSessie(x.beheer); toonSessie(); };
-    li.appendChild(knop);
-    ul.appendChild(li);
+  host.innerHTML="";
+  host.appendChild(el("p","note","Mijn sessies ophalen…"));
+  K.mijnSessies().then(function(lijst){
+    host.innerHTML="";
+    if(!lijst.length){
+      host.appendChild(el("p","note","Nog geen sessies. Start er hierboven een."));
+      return;
+    }
+    host.appendChild(el("p","note","Mijn sessies — dertig dagen te bekijken"));
+    var ul=el("ul","seslijst");
+    lijst.forEach(function(x){
+      var li=el("li");
+      var wat=el("div","wat");
+      wat.appendChild(el("b",null, x.code + (x.titel? " · "+x.titel : "")));
+      var meta=datumKort(x.datum);
+      if(x.leerlingen!=null) meta+=" · "+x.leerlingen+" leerling"+(x.leerlingen===1?"":"en");
+      if(x.actief===true) meta+=" · loopt nog";
+      wat.appendChild(el("span",null,meta));
+      li.appendChild(wat);
+      var knop=el("button","btn btn--ghost","Bekijk"); knop.type="button";
+      knop.onclick=function(){ K.kiesSessie(x); toonSessie(); };
+      li.appendChild(knop);
+      ul.appendChild(li);
+    });
+    host.appendChild(ul);
+  }).catch(function(){
+    host.innerHTML="";
+    host.appendChild(el("p","note","Je sessies ophalen lukte even niet."));
   });
-  host.appendChild(ul);
 }
 
 function foutenTekst(f){
@@ -335,11 +378,22 @@ function tekenStand(ov){
 }
 
 if(K){
+  $("#sesLogin").onclick=function(){ K.aanmelden(location.href); };
+  $("#sesLogout").onclick=function(){
+    if(stopVolgen){ stopVolgen(); stopVolgen=null; }
+    K.sluitSessie();
+    K.afmelden().then(toonSessie);
+  };
   $("#sesStart").onclick=function(){
     var knop=this; knop.disabled=true;
     K.start("taalkrak", TK.GRAAD_LABEL[state.graad])
       .then(toonSessie)
-      .catch(function(f){ alert("Een sessie starten lukte niet: "+f.message); })
+      .catch(function(f){
+        alert(f.message==="niet_aangemeld" ? "Meld je eerst aan om een sessie te starten."
+            : f.message==="te_veel_sessies" ? "Je hebt het afgelopen uur al veel sessies gestart. Probeer straks nog eens."
+            : "Een sessie starten lukte niet: "+f.message);
+        toonSessie();
+      })
       .then(function(){ knop.disabled=false; });
   };
   $("#sesRonde").onclick=function(){
@@ -380,6 +434,7 @@ if(K){
 } else {
   toonSessie();
 }
+
 })();
 </script>
 </body>

@@ -1,5 +1,5 @@
 /* ============================================================
-   Krak — sessielaag voor Taalkrak en Rekenkrak   (versie 3)
+   Krak — sessielaag voor Taalkrak en Rekenkrak   (versie 4)
    ------------------------------------------------------------
    Praat met Supabase via gewone fetch-oproepen naar de RPC-functies.
    Geen SDK, geen CDN, geen build-stap: past bij de rest van de app en
@@ -25,6 +25,7 @@ var CFG = (typeof window!=="undefined" && window.KRAK_CONFIG) || null;
 var SLEUTEL_BEHEER  = "krak.beheer";   /* de sessie die nu open staat */
 var SLEUTEL_ARCHIEF = "krak.sessies";  /* alle sessies van deze leerkracht  */
 var VOORVOEGSEL_DEELNAME = "krak.deelname.";
+var SLEUTEL_AUTH    = "krak.auth";     /* aanmelding van de leerkracht      */
 
 /* ---------- basis ---------- */
 
@@ -42,15 +43,112 @@ function basisUrl(){
     .replace(/\/+$/, "").replace(/\/rest\/v1$/i, "").replace(/\/+$/, "");
 }
 
-function rpc(naam, params){
+/* ---------- aanmelding van de leerkracht ----------
+   Leerlingen hebben dit niet nodig: zonder aanmelding praat de app met de
+   publieke sleutel, en dat volstaat om aan te sluiten en te oefenen. */
+
+function auth(){
+  var a = haal(SLEUTEL_AUTH);
+  return (a && a.access_token) ? a : null;
+}
+function aangemeld(){ return !!auth(); }
+function gebruiker(){ var a = auth(); return a ? (a.user || null) : null; }
+
+/* Naar Google en terug. redirect_to moet in Supabase bij de toegelaten
+   Redirect URLs staan, anders weigert hij de omleiding. */
+function aanmelden(terug){
+  if(!ingesteld()) return;
+  var naar = String(terug || (typeof location!=="undefined" ? location.href : ""));
+  naar = naar.split("#")[0];
+  location.href = basisUrl() + "/auth/v1/authorize?provider=google&redirect_to=" +
+                  encodeURIComponent(naar);
+}
+
+function afmelden(){
+  var a = auth();
+  wis(SLEUTEL_AUTH);
+  if(!a) return Promise.resolve(true);
+  return fetch(basisUrl() + "/auth/v1/logout", {
+    method: "POST",
+    headers: { "apikey": CFG.sleutel, "Authorization": "Bearer " + a.access_token }
+  }).then(function(){ return true; }).catch(function(){ return true; });
+}
+
+/* Komt Supabase terug van Google, dan staan de tokens in de hash.
+   Die halen we eruit en poetsen we meteen weg. */
+function verwerkAanmelding(){
+  if(typeof location === "undefined" || !location.hash) return null;
+  var h = location.hash.replace(/^#/, "");
+  if(h.indexOf("access_token=") < 0) return null;
+  var kv = {};
+  h.split("&").forEach(function(deel){
+    var i = deel.indexOf("=");
+    if(i > 0) kv[deel.slice(0,i)] = decodeURIComponent(deel.slice(i+1));
+  });
+  if(!kv.access_token) return null;
+  var a = {
+    access_token: kv.access_token,
+    refresh_token: kv.refresh_token || null,
+    verloopt: Date.now() + (parseInt(kv.expires_in,10) || 3600) * 1000,
+    user: null
+  };
+  zet(SLEUTEL_AUTH, a);
+  try{ history.replaceState(null, "", location.pathname + location.search); }catch(e){}
+  return a;
+}
+
+/* Wie ben ik? Vult het e-mailadres aan zodat de app het kan tonen. */
+function haalGebruiker(){
+  var a = auth();
+  if(!a) return Promise.resolve(null);
+  if(a.user) return Promise.resolve(a.user);
+  return fetch(basisUrl() + "/auth/v1/user", {
+    headers: { "apikey": CFG.sleutel, "Authorization": "Bearer " + a.access_token }
+  }).then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(u){
+      if(u){ a.user = { id: u.id, email: u.email }; zet(SLEUTEL_AUTH, a); }
+      return a.user;
+    }).catch(function(){ return null; });
+}
+
+function vernieuwToken(){
+  var a = auth();
+  if(!a || !a.refresh_token) return Promise.resolve(false);
+  return fetch(basisUrl() + "/auth/v1/token?grant_type=refresh_token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "apikey": CFG.sleutel },
+    body: JSON.stringify({ refresh_token: a.refresh_token })
+  }).then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){
+      if(!j || !j.access_token){ wis(SLEUTEL_AUTH); return false; }
+      zet(SLEUTEL_AUTH, {
+        access_token: j.access_token,
+        refresh_token: j.refresh_token || a.refresh_token,
+        verloopt: Date.now() + (j.expires_in || 3600) * 1000,
+        user: (j.user ? { id: j.user.id, email: j.user.email } : a.user) || null
+      });
+      return true;
+    }).catch(function(){ return false; });
+}
+
+/* ---------- praten met de databank ---------- */
+
+function rpc(naam, params, tweedePoging){
   if(!ingesteld()) return Promise.reject(new Error("krak-config.js is nog niet ingevuld"));
+  var a = auth();
+
+  /* Bijna verlopen? Eerst vernieuwen, anders faalt de oproep onderweg. */
+  if(a && a.verloopt && a.verloopt - Date.now() < 60000 && !tweedePoging){
+    return vernieuwToken().then(function(){ return rpc(naam, params, true); });
+  }
+
   return fetch(basisUrl() + "/rest/v1/rpc/" + naam, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Accept": "application/json",
       "apikey": CFG.sleutel,
-      "Authorization": "Bearer " + CFG.sleutel
+      "Authorization": "Bearer " + (a ? a.access_token : CFG.sleutel)
     },
     body: JSON.stringify(params || {})
   }).then(function(r){
@@ -58,6 +156,13 @@ function rpc(naam, params){
       var data = null;
       try{ data = tekst ? JSON.parse(tekst) : null; }catch(e){}
       if(!r.ok){
+        /* Token afgekeurd: één keer vernieuwen en opnieuw proberen. */
+        if((r.status===401 || r.status===403) && a && !tweedePoging){
+          return vernieuwToken().then(function(gelukt){
+            if(!gelukt){ wis(SLEUTEL_AUTH); }
+            return rpc(naam, params, true);
+          });
+        }
         var reden = (data && (data.message || data.hint)) || ("http_" + r.status);
         var f = new Error(reden); f.status = r.status; f.data = data;
         throw f;
@@ -127,20 +232,37 @@ function start(app, titel){
 
 /* ---------- archief: alle sessies van deze leerkracht ---------- */
 
-function mijnSessies(){
+/* Wat er in deze browser bewaard is. Blijft bestaan voor sessies van vóór
+   de aanmelding, en dient als terugval zonder net. */
+function lokaalArchief(){
   var l = haal(SLEUTEL_ARCHIEF);
   return (l && l.length) ? l : [];
 }
 
+/* Mijn sessies. Aangemeld komen ze van de server — dan volgt je lijst je
+   naar elk toestel. Niet aangemeld blijft het wat deze browser onthield. */
+function mijnSessies(){
+  if(!aangemeld()) return Promise.resolve(lokaalArchief());
+  return rpc("mijn_sessies").then(function(lijst){
+    lijst = lijst || [];
+    /* Sessies van vóór de aanmelding hebben nog geen eigenaar: die staan
+       alleen lokaal. Toon ze erbij zodat er niets uit het zicht valt. */
+    var vanServer = {};
+    lijst.forEach(function(s){ vanServer[s.beheer] = true; });
+    var extra = lokaalArchief().filter(function(s){ return !vanServer[s.beheer]; });
+    return lijst.concat(extra);
+  }).catch(function(){ return lokaalArchief(); });
+}
+
 function bewaarInArchief(s){
-  var l = mijnSessies().filter(function(x){ return x.beheer !== s.beheer; });
+  var l = lokaalArchief().filter(function(x){ return x.beheer !== s.beheer; });
   l.unshift(s);
   if(l.length > 50) l = l.slice(0, 50);
   zet(SLEUTEL_ARCHIEF, l);
 }
 
 function uitArchief(beheer){
-  zet(SLEUTEL_ARCHIEF, mijnSessies().filter(function(x){ return x.beheer !== beheer; }));
+  zet(SLEUTEL_ARCHIEF, lokaalArchief().filter(function(x){ return x.beheer !== beheer; }));
   var open = haal(SLEUTEL_BEHEER);
   if(open && open.beheer === beheer) wis(SLEUTEL_BEHEER);
 }
@@ -151,10 +273,14 @@ function lopendeSessie(){
 }
 
 /* Een sessie uit het archief openen. */
-function kiesSessie(beheer){
-  var s = null;
-  mijnSessies().forEach(function(x){ if(x.beheer === beheer) s = x; });
-  if(s) zet(SLEUTEL_BEHEER, s);
+function kiesSessie(beheerOfSessie){
+  var s = beheerOfSessie;
+  if(typeof beheerOfSessie === "string"){
+    s = null;
+    lokaalArchief().forEach(function(x){ if(x.beheer === beheerOfSessie) s = x; });
+    if(!s) s = { beheer: beheerOfSessie, code: "····" };
+  }
+  if(s && s.beheer) zet(SLEUTEL_BEHEER, s);
   return s;
 }
 
@@ -185,6 +311,9 @@ function herstelUitLink(bron){
               titel: ov.titel, datum: ov.aangemaakt_op };
     bewaarInArchief(s);
     zet(SLEUTEL_BEHEER, s);
+    /* Hoort ze nog niemand toe en ben je aangemeld, dan wordt ze van jou. */
+    if(aangemeld()) return rpc("sessie_opeisen", { p_beheer_token: b })
+                      .catch(function(){ return false; }).then(function(){ return s; });
     return s;
   });
 }
@@ -358,6 +487,13 @@ return {
   ingesteld: ingesteld,
   codeUitHash: codeUitHash,
   codeInLink: codeInLink,
+
+  aangemeld: aangemeld,
+  gebruiker: gebruiker,
+  haalGebruiker: haalGebruiker,
+  aanmelden: aanmelden,
+  afmelden: afmelden,
+  verwerkAanmelding: verwerkAanmelding,
 
   start: start,
   rondeStart: rondeStart,
