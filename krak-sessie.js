@@ -57,15 +57,23 @@ function gebruiker(){ var a = auth(); return a ? (a.user || null) : null; }
 /* Naar de aanbieder en terug. provider is "google" of "azure" — dat laatste
    is hoe Supabase Microsoft noemt. redirect_to moet in Supabase bij de
    toegelaten Redirect URLs staan, anders weigert hij de omleiding. */
-var AANBIEDERS = { google: "google", microsoft: "azure", azure: "azure" };
+/* Microsoft heet bij Supabase "azure". En bij azure moet je het e-mailadres
+   uitdrukkelijk vragen: zonder de email-scope komt de aanmelding terug met
+   "Error getting user email from external provider". */
+var AANBIEDERS = {
+  google:    { naam: "google", scopes: "" },
+  microsoft: { naam: "azure",  scopes: "openid email profile" },
+  azure:     { naam: "azure",  scopes: "openid email profile" }
+};
 
 function aanmelden(terug, aanbieder){
   if(!ingesteld()) return;
-  var p = AANBIEDERS[String(aanbieder || "google").toLowerCase()] || "google";
+  var a = AANBIEDERS[String(aanbieder || "google").toLowerCase()] || AANBIEDERS.google;
   var naar = String(terug || (typeof location!=="undefined" ? location.href : ""));
   naar = naar.split("#")[0];
-  location.href = basisUrl() + "/auth/v1/authorize?provider=" + p + "&redirect_to=" +
-                  encodeURIComponent(naar);
+  location.href = basisUrl() + "/auth/v1/authorize?provider=" + a.naam +
+                  (a.scopes ? "&scopes=" + encodeURIComponent(a.scopes) : "") +
+                  "&redirect_to=" + encodeURIComponent(naar);
 }
 
 function afmelden(){
@@ -78,17 +86,27 @@ function afmelden(){
   }).then(function(){ return true; }).catch(function(){ return true; });
 }
 
-/* Komt Supabase terug van Google, dan staan de tokens in de hash.
-   Die halen we eruit en poetsen we meteen weg. */
+/* Terug van de aanbieder. Bij succes staan de tokens in de hash; bij een
+   mislukking staat er een foutmelding — in de hash én in de zoekreeks.
+   Die moet zichtbaar worden, anders lijkt het alsof er niets gebeurt.
+   Geeft {fout:"..."} terug bij een mislukking. */
 function verwerkAanmelding(){
-  if(typeof location === "undefined" || !location.hash) return null;
-  var h = location.hash.replace(/^#/, "");
-  if(h.indexOf("access_token=") < 0) return null;
-  var kv = {};
-  h.split("&").forEach(function(deel){
-    var i = deel.indexOf("=");
-    if(i > 0) kv[deel.slice(0,i)] = decodeURIComponent(deel.slice(i+1));
-  });
+  if(typeof location === "undefined") return null;
+  function ontleed(tekst){
+    var kv = {};
+    String(tekst || "").replace(/^[#?]/, "").split("&").forEach(function(deel){
+      var i = deel.indexOf("=");
+      if(i > 0) kv[deel.slice(0,i)] = decodeURIComponent(deel.slice(i+1).replace(/\+/g," "));
+    });
+    return kv;
+  }
+  var h = ontleed(location.hash), q = ontleed(location.search);
+  var fout = h.error_description || q.error_description || h.error || q.error;
+  if(fout){
+    try{ history.replaceState(null, "", location.pathname); }catch(e){}
+    return { fout: String(fout) };
+  }
+  var kv = h;
   if(!kv.access_token) return null;
   var a = {
     access_token: kv.access_token,
@@ -243,22 +261,44 @@ function lokaalArchief(){
   return (l && l.length) ? l : [];
 }
 
-/* Mijn sessies. Aangemeld komen ze van de server — dan volgt je lijst je
-   naar elk toestel. Niet aangemeld blijft het wat deze browser onthield. */
+/* Mijn sessies. Aangemeld komen ze uitsluitend van de server: wat deze
+   browser toevallig onthield hoort niet in de lijst van wie er nu aangemeld
+   is — op een gedeelde klaslaptop zou je dan de sessies van een collega zien.
+   Niet aangemeld blijft het wat deze browser onthield. */
 function mijnSessies(){
   if(!aangemeld()) return Promise.resolve(lokaalArchief());
-  return rpc("mijn_sessies").then(function(lijst){
-    lijst = lijst || [];
-    /* Sessies van vóór de aanmelding hebben nog geen eigenaar: die staan
-       alleen lokaal. Toon ze erbij zodat er niets uit het zicht valt. */
-    var vanServer = {};
-    lijst.forEach(function(s){ vanServer[s.beheer] = true; });
-    var extra = lokaalArchief().filter(function(s){ return !vanServer[s.beheer]; });
-    return lijst.concat(extra);
-  }).catch(function(){ return lokaalArchief(); });
+  return rpc("mijn_sessies").then(function(lijst){ return lijst || []; })
+                            .catch(function(){ return []; });
 }
 
+/* Sessies die op dit toestel bewaard zijn maar (nog) geen eigenaar hebben —
+   van vóór er aangemeld werd. */
+function oudeSessies(){ return aangemeld() ? lokaalArchief() : []; }
+
+/* Die alsnog aan je account hangen. Wat van iemand anders blijkt te zijn of
+   niet meer bestaat, verdwijnt gewoon uit deze browser. */
+function koppelOudeSessies(){
+  if(!aangemeld()) return Promise.resolve(0);
+  var lijst = lokaalArchief();
+  if(!lijst.length) return Promise.resolve(0);
+  var aantal = 0;
+  return lijst.reduce(function(ketting, s){
+    return ketting.then(function(){
+      return rpc("sessie_opeisen", { p_beheer_token: s.beheer })
+        .then(function(ok){ if(ok) aantal++; })
+        .catch(function(){});
+    });
+  }, Promise.resolve()).then(function(){
+    zet(SLEUTEL_ARCHIEF, []);
+    return aantal;
+  });
+}
+
+/* Alleen wie niet aangemeld is heeft deze browseropslag nodig. Aangemeld
+   staat de sessie op de server, en dan hoort ze niet in een lijst die op een
+   gedeelde klaslaptop voor de volgende leerkracht blijft staan. */
 function bewaarInArchief(s){
+  if(aangemeld()) return;
   var l = lokaalArchief().filter(function(x){ return x.beheer !== s.beheer; });
   l.unshift(s);
   if(l.length > 50) l = l.slice(0, 50);
@@ -503,6 +543,8 @@ return {
   rondeStart: rondeStart,
   lopendeSessie: lopendeSessie,
   mijnSessies: mijnSessies,
+  oudeSessies: oudeSessies,
+  koppelOudeSessies: koppelOudeSessies,
   kiesSessie: kiesSessie,
   sluitSessie: sluitSessie,
   vergeetSessie: vergeetSessie,

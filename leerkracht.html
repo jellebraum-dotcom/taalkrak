@@ -46,6 +46,10 @@
 .idp:active{ transform:translateY(1px); }
 .idp:focus-visible{ outline:2px solid #2FA8C6; outline-offset:2px; }
 .idp svg{ width:18px; height:18px; flex:none; display:block; }
+.melding{ margin-top:10px; padding:10px 12px; border-radius:10px; font-size:14px;
+          color:#8A2F22; background:#FDEDEA; border:1px solid #F3C6BE; }
+.oudemelding{ margin-top:12px; padding:10px 12px; border-radius:10px; font-size:14px;
+              background:rgba(0,0,0,.05); }
 </style>
 </head>
 <body>
@@ -119,6 +123,7 @@
           <button class="btn btn--ghost btn--block" id="sesTerug" type="button">← Mijn sessies</button>
         </div>
 
+        <div class="melding hidden" id="sesFout"></div>
         <div class="seswie hidden" id="sesWie">
           <span id="sesWieNaam"></span>
           <button class="btn btn--ghost" id="sesLogout" type="button">Afmelden</button>
@@ -174,9 +179,13 @@
 "use strict";
 var $=function(s){return document.querySelector(s);};
 var $$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s));};
-/* Terug van Google? Dan staan de tokens in de hash — die eerst opruimen,
-   vóór iets anders de hash probeert te lezen. */
-if(typeof KrakSessie!=="undefined" && KrakSessie.ingesteld()) KrakSessie.verwerkAanmelding();
+/* Terug van de aanmelding? Tokens of foutmelding uit de hash halen, vóór
+   iets anders de hash probeert te lezen. */
+var aanmeldFout = null;
+if(typeof KrakSessie!=="undefined" && KrakSessie.ingesteld()){
+  var uitkomst = KrakSessie.verwerkAanmelding();
+  if(uitkomst && uitkomst.fout) aanmeldFout = uitkomst.fout;
+}
 
 var state = TK.defaults();
 
@@ -282,6 +291,10 @@ function toonSessie(){
   $("#sesAan").classList.toggle("hidden", !ses);
   $("#sesOverzicht").classList.toggle("hidden", !ses);
 
+  if(aanmeldFout){
+    $("#sesFout").textContent = "Aanmelden lukte niet: " + aanmeldFout;
+    $("#sesFout").classList.remove("hidden");
+  }
   if(aan){
     var g = K.gebruiker();
     $("#sesWieNaam").textContent = g && g.email ? "Aangemeld als "+g.email : "Aangemeld";
@@ -315,6 +328,7 @@ function tekenArchief(){
     host.innerHTML="";
     if(!lijst.length){
       host.appendChild(el("p","note","Nog geen sessies. Start er hierboven een."));
+      toonOudeSessies(host);
       return;
     }
     host.appendChild(el("p","note","Mijn sessies — dertig dagen te bekijken"));
@@ -334,10 +348,34 @@ function tekenArchief(){
       ul.appendChild(li);
     });
     host.appendChild(ul);
+    toonOudeSessies(host);
   }).catch(function(){
     host.innerHTML="";
     host.appendChild(el("p","note","Je sessies ophalen lukte even niet."));
   });
+}
+
+/* Sessies van vóór de aanmelding staan alleen op dit toestel en horen nog
+   bij niemand. Ze hier apart tonen is eerlijker dan ze tussen je eigen
+   sessies te zetten — zeker op een gedeelde laptop. */
+function toonOudeSessies(host){
+  var oud = K.oudeSessies();
+  if(!oud.length) return;
+  var vak = el("div","oudemelding");
+  vak.appendChild(el("div", null, oud.length===1
+    ? "Er staat nog 1 sessie op dit toestel van vóór je aanmelding."
+    : "Er staan nog " + oud.length + " sessies op dit toestel van vóór je aanmelding."));
+  var knop = el("button","btn btn--ghost","Koppel aan mijn account");
+  knop.type="button";
+  knop.style.marginTop="8px";
+  knop.onclick=function(){
+    knop.disabled=true; knop.textContent="Bezig…";
+    K.koppelOudeSessies().then(function(n){
+      tekenArchief();
+    }).catch(function(){ knop.disabled=false; knop.textContent="Koppel aan mijn account"; });
+  };
+  vak.appendChild(knop);
+  host.appendChild(vak);
 }
 
 function foutenTekst(f){
