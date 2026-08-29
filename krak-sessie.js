@@ -54,13 +54,17 @@ function auth(){
 function aangemeld(){ return !!auth(); }
 function gebruiker(){ var a = auth(); return a ? (a.user || null) : null; }
 
-/* Naar Google en terug. redirect_to moet in Supabase bij de toegelaten
-   Redirect URLs staan, anders weigert hij de omleiding. */
-function aanmelden(terug){
+/* Naar de aanbieder en terug. provider is "google" of "azure" — dat laatste
+   is hoe Supabase Microsoft noemt. redirect_to moet in Supabase bij de
+   toegelaten Redirect URLs staan, anders weigert hij de omleiding. */
+var AANBIEDERS = { google: "google", microsoft: "azure", azure: "azure" };
+
+function aanmelden(terug, aanbieder){
   if(!ingesteld()) return;
+  var p = AANBIEDERS[String(aanbieder || "google").toLowerCase()] || "google";
   var naar = String(terug || (typeof location!=="undefined" ? location.href : ""));
   naar = naar.split("#")[0];
-  location.href = basisUrl() + "/auth/v1/authorize?provider=google&redirect_to=" +
+  location.href = basisUrl() + "/auth/v1/authorize?provider=" + p + "&redirect_to=" +
                   encodeURIComponent(naar);
 }
 
