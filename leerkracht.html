@@ -30,6 +30,9 @@
          overflow-wrap:anywhere; }
 .sesoud{ margin-top:12px; border-top:1px solid rgba(0,0,0,.08); padding-top:8px; }
 .sesoud summary{ cursor:pointer; font-size:15px; opacity:.75; }
+.btn:disabled{ opacity:.4; cursor:not-allowed; filter:grayscale(.5); }
+.sesklaar{ text-align:center; font-weight:700; padding:10px 12px; border-radius:12px;
+           background:rgba(0,0,0,.06); margin:6px 0 10px; }
 </style>
 </head>
 <body>
@@ -72,6 +75,7 @@
           <p class="note" id="sesStatus"></p>
           <button class="btn btn--grass btn--block" id="sesRonde" type="button">▶ Zet deze oefening klaar</button>
           <button class="btn btn--ghost btn--block" id="sesStop" type="button">Sessie beëindigen</button>
+          <div class="sesklaar hidden" id="sesKlaar">✓ Deze sessie is beëindigd — je bekijkt de resultaten</div>
           <div class="linkrow" style="margin-top:10px">
             <input id="sesLink" type="text" readonly aria-label="Link om deze sessie later te bekijken">
             <button class="btn btn--sun" id="sesKopie" type="button">Kopieer</button>
@@ -296,6 +300,9 @@ function tekenStand(ov){
     (ov.actief? "Loopt":"Beëindigd")+" · "+n+" leerling"+(n===1?"":"en")+
     " · "+(ov.huidige_ronde? "oefening "+ov.huidige_ronde : "nog geen oefening")+
     (ov.aangemaakt_op? " · "+datumKort(ov.aangemaakt_op):"");
+  $("#sesRonde").classList.toggle("hidden", !ov.actief);
+  $("#sesStop").classList.toggle("hidden", !ov.actief);
+  $("#sesKlaar").classList.toggle("hidden", ov.actief);
   $("#sesRonde").disabled=!ov.actief;
   $("#sesStop").disabled=!ov.actief;
   $("#sesRonde").textContent = ov.huidige_ronde? "▶ Zet volgende oefening klaar" : "▶ Zet deze oefening klaar";
@@ -343,7 +350,12 @@ if(K){
   };
   $("#sesStop").onclick=function(){
     if(!confirm("De sessie beëindigen? De leerlingen kunnen dan niets meer doorsturen. Je kan de resultaten nadien nog bekijken.")) return;
-    K.beeindig();
+    var knop=this; knop.disabled=true;
+    K.beeindig()
+      .then(function(){ return K.overzicht(); })      /* meteen bijwerken i.p.v. wachten */
+      .then(function(ov){ if(ov) tekenStand(ov); })
+      .catch(function(){})
+      .then(function(){ knop.disabled=false; });
   };
   $("#sesTerug").onclick=function(){
     if(stopVolgen){ stopVolgen(); stopVolgen=null; }
