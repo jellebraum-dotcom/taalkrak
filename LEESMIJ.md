@@ -20,8 +20,8 @@ Taalkrak werkt precies zoals Rekenkrak: alle bestanden in één map op GitHub Pa
 1. Repo → **Settings** → **Pages** (linkermenu).
 2. Bij *Source*: **Deploy from a branch** → branch **main**, map **/ (root)** → **Save**.
 3. Na een minuutje staat de site op:
-   - Leerlingen: `https://jellebraum-dotcom.github.io/taalkrak/`
-   - Leerkracht: `https://jellebraum-dotcom.github.io/taalkrak/leerkracht.html`
+   - Leerlingen: `https://oefenkrak.be/taalkrak/`
+   - Leerkracht: `https://oefenkrak.be/taalkrak/leerkracht.html`
 
 ## 4. Op de iPads zetten
 
