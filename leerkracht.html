@@ -324,7 +324,7 @@ function tekenArchief(){
   if(!K) return;
   host.innerHTML="";
   host.appendChild(el("p","note","Mijn sessies ophalen…"));
-  K.mijnSessies().then(function(lijst){
+  K.mijnSessies("taalkrak").then(function(lijst){
     host.innerHTML="";
     if(!lijst.length){
       host.appendChild(el("p","note","Nog geen sessies. Start er hierboven een."));
@@ -359,7 +359,7 @@ function tekenArchief(){
    bij niemand. Ze hier apart tonen is eerlijker dan ze tussen je eigen
    sessies te zetten — zeker op een gedeelde laptop. */
 function toonOudeSessies(host){
-  var oud = K.oudeSessies();
+  var oud = K.oudeSessies("taalkrak");
   if(!oud.length) return;
   var vak = el("div","oudemelding");
   vak.appendChild(el("div", null, oud.length===1

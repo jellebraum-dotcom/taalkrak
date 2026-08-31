@@ -265,15 +265,23 @@ function lokaalArchief(){
    browser toevallig onthield hoort niet in de lijst van wie er nu aangemeld
    is — op een gedeelde klaslaptop zou je dan de sessies van een collega zien.
    Niet aangemeld blijft het wat deze browser onthield. */
-function mijnSessies(){
-  if(!aangemeld()) return Promise.resolve(lokaalArchief());
-  return rpc("mijn_sessies").then(function(lijst){ return lijst || []; })
+/* app is "taalkrak" of "rekenkrak": een leerkracht wil op de Rekenkrak-pagina
+   haar rekensessies zien, niet die van spelling. Laat je het weg, dan krijg je
+   alles. */
+function filterApp(lijst, app){
+  if(!app) return lijst;
+  return lijst.filter(function(s){ return !s.app || s.app === app; });
+}
+
+function mijnSessies(app){
+  if(!aangemeld()) return Promise.resolve(filterApp(lokaalArchief(), app));
+  return rpc("mijn_sessies").then(function(lijst){ return filterApp(lijst || [], app); })
                             .catch(function(){ return []; });
 }
 
 /* Sessies die op dit toestel bewaard zijn maar (nog) geen eigenaar hebben —
    van vóór er aangemeld werd. */
-function oudeSessies(){ return aangemeld() ? lokaalArchief() : []; }
+function oudeSessies(app){ return aangemeld() ? filterApp(lokaalArchief(), app) : []; }
 
 /* Die alsnog aan je account hangen. Wat van iemand anders blijkt te zijn of
    niet meer bestaat, verdwijnt gewoon uit deze browser. */
