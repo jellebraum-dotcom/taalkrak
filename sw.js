@@ -1,7 +1,7 @@
 /* Taalkrak service worker — app-shell cache voor offline gebruik */
-var CACHE = "taalkrak-v12";
+var CACHE = "taalkrak-v13";
 var ASSETS = [
-  "./", "index.html", "leerkracht.html", "taalkrak.css",
+  "./", "index.html", "leerkracht.html", "taalkrak.css", "krak-design.css", "fonts/nunito.woff2", "fonts/fredoka.woff2",
   "engine.js", "jsqr.js", "qrcode.js", "manifest.webmanifest",
   "krak-config.js", "krak-sessie.js",
   "icon-192.png", "icon-512.png", "icon-512-maskable.png", "apple-touch-icon.png"
